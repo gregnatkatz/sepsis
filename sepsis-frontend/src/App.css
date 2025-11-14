@@ -1,0 +1,79 @@
+/* Teams Dark Theme Variables */
+:root {
+  --dark: #1a1a1a;
+  --dark-card: #252525;
+  --dark-hover: #2d2d2d;
+  --teams-purple: #6264a7;
+  --gray-700: #3f3f46;
+  --gray-600: #52525b;
+  --gray-500: #71717a;
+  --gray-400: #a1a1aa;
+  --gray-300: #d4d4d8;
+}
+
+#root {
+  max-width: none;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  text-align: left;
+}
+
+body {
+  background-color: var(--dark);
+  color: white;
+}
+
+/* Dark theme utility classes */
+.bg-dark {
+  background-color: var(--dark);
+}
+
+.bg-dark-card {
+  background-color: var(--dark-card);
+}
+
+.bg-dark-hover {
+  background-color: var(--dark-hover);
+}
+
+.bg-teams-purple {
+  background-color: var(--teams-purple);
+}
+
+.text-teams-purple {
+  color: var(--teams-purple);
+}
+
+.border-teams-purple {
+  border-color: var(--teams-purple);
+}
+
+/* Scrollbar styling for dark theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--dark);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--gray-600);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--gray-500);
+}
+
+/* Table styling */
+table {
+  border-collapse: collapse;
+}
+
+/* Smooth transitions */
+* {
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}

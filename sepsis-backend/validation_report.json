@@ -1,0 +1,1570 @@
+{
+  "generated_at": "2025-11-14T19:24:22.655601",
+  "summary": {
+    "total_patients": 34,
+    "successful": 34,
+    "success_rate": 1.0,
+    "latency": {
+      "min": 2165.2116775512695,
+      "median": 2534.355640411377,
+      "p95": 3726.3073921203613,
+      "max": 4336.07816696167
+    },
+    "severity_distribution": {
+      "critical": 7,
+      "warning": 13,
+      "info": 69,
+      "success": 19
+    },
+    "category_distribution": {
+      "sepsis": 34,
+      "hemodynamics": 29,
+      "labs": 35,
+      "monitoring": 10
+    },
+    "schema_errors": 0,
+    "alignment_issues": 4
+  },
+  "alignment_issues": [
+    {
+      "patient": "James Brown",
+      "issue": "Patient James Brown has qSOFA 3 but no organ dysfunction mentioned"
+    },
+    {
+      "patient": "Charles Harris",
+      "issue": "Patient Charles Harris has qSOFA 2 but no organ dysfunction mentioned"
+    },
+    {
+      "patient": "Mary Johnson",
+      "issue": "Sepsis patient Mary Johnson has no sepsis-related insights"
+    },
+    {
+      "patient": "David Rodriguez",
+      "issue": "Sepsis patient David Rodriguez has no sepsis-related insights"
+    }
+  ],
+  "results": [
+    {
+      "patient_id": "1",
+      "patient_name": "James Brown",
+      "risk_level": "CRITICAL",
+      "sepsis_confirmed": true,
+      "qsofa_score": 3,
+      "sofa_score": 8,
+      "success": true,
+      "latency": 3636.324644088745,
+      "num_insights": 4,
+      "insights": [
+        {
+          "severity": "critical",
+          "category": "sepsis",
+          "title": "Septic Shock With Maximum SIRS Criteria",
+          "description": "SIRS 4/4 with HR 118 bpm, Temp 39.1\u00b0C, RR 26, BP 88/55 indicates severe sepsis with shock.",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "alert-triangle",
+          "ts": "2025-11-14T19:22:53.973929Z",
+          "id": "1-0"
+        },
+        {
+          "severity": "critical",
+          "category": "hemodynamics",
+          "title": "Hypotension With Tachycardia Detected",
+          "description": "BP dropped to 88/55 and HR rose to 118 bpm in last 12 hours.",
+          "agent": "Clinical Deterioration Agent",
+          "icon": "activity",
+          "ts": "2025-11-14T19:20:53.973929Z",
+          "id": "1-1"
+        },
+        {
+          "severity": "warning",
+          "category": "labs",
+          "title": "Rising WBC And Lactate Levels",
+          "description": "WBC up 4.6 K/\u00b5L to 19.8 K/\u00b5L, lactate up 1.3 mmol/L to 3.5 mmol/L in 12 hours.",
+          "agent": "Lab Analysis Agent",
+          "icon": "beaker",
+          "ts": "2025-11-14T19:18:53.973929Z",
+          "id": "1-2"
+        },
+        {
+          "severity": "info",
+          "category": "monitoring",
+          "title": "Foley Catheter And IV Present Day 4",
+          "description": "Foley catheter and IV line in place for 4 days; monitor for infection sources.",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "stethoscope",
+          "ts": "2025-11-14T19:16:53.973929Z",
+          "id": "1-3"
+        }
+      ]
+    },
+    {
+      "patient_id": "2",
+      "patient_name": "Richard Moore",
+      "risk_level": "MODERATE",
+      "sepsis_confirmed": false,
+      "qsofa_score": 0,
+      "sofa_score": 4,
+      "success": true,
+      "latency": 2403.318405151367,
+      "num_insights": 3,
+      "insights": [
+        {
+          "severity": "warning",
+          "category": "sepsis",
+          "title": "Moderate sepsis risk with SIRS 2/4",
+          "description": "Current risk score 55/100, HR 98 bpm, Temp 38.3\u00b0C, WBC 12.5 K/\u00b5L, RR 20.",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "alert-triangle",
+          "ts": "2025-11-14T19:22:56.378291Z",
+          "id": "2-0"
+        },
+        {
+          "severity": "warning",
+          "category": "labs",
+          "title": "WBC and lactate levels trending up",
+          "description": "WBC increased to 12.5 K/\u00b5L (+4.5%), lactate up to 1.8 mmol/L (+6.7%) over 12 hours.",
+          "agent": "Lab Analysis Agent",
+          "icon": "beaker",
+          "ts": "2025-11-14T19:20:56.378291Z",
+          "id": "2-1"
+        },
+        {
+          "severity": "info",
+          "category": "hemodynamics",
+          "title": "Hemodynamics stable but monitor closely",
+          "description": "BP 118/72 with HR 98 bpm; no current hypotension.",
+          "agent": "Clinical Deterioration Agent",
+          "icon": "stethoscope",
+          "ts": "2025-11-14T19:18:56.378291Z",
+          "id": "2-2"
+        }
+      ]
+    },
+    {
+      "patient_id": "3",
+      "patient_name": "John Smith",
+      "risk_level": "LOW",
+      "sepsis_confirmed": false,
+      "qsofa_score": 0,
+      "sofa_score": 0,
+      "success": true,
+      "latency": 2795.811176300049,
+      "num_insights": 3,
+      "insights": [
+        {
+          "severity": "info",
+          "category": "sepsis",
+          "title": "Low Sepsis Risk and No SIRS",
+          "description": "Current risk score 27/100 (low) with 0/4 SIRS criteria met.",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "thermometer",
+          "ts": "2025-11-14T19:22:59.174285Z",
+          "id": "3-0"
+        },
+        {
+          "severity": "info",
+          "category": "labs",
+          "title": "Stable Inflammatory Markers Post-Op",
+          "description": "WBC slightly increased to 10.5 K/\u00b5L (+0.4), lactate stable at 1.5 mmol/L.",
+          "agent": "Lab Analysis Agent",
+          "icon": "beaker",
+          "ts": "2025-11-14T19:20:59.174285Z",
+          "id": "3-1"
+        },
+        {
+          "severity": "info",
+          "category": "hemodynamics",
+          "title": "Stable Vitals and Hemodynamics",
+          "description": "BP 118/75, HR 85 bpm, temp 37.5\u00b0C, RR 18; no concerning trends.",
+          "agent": "Clinical Deterioration Agent",
+          "icon": "stethoscope",
+          "ts": "2025-11-14T19:18:59.174285Z",
+          "id": "3-2"
+        }
+      ]
+    },
+    {
+      "patient_id": "4",
+      "patient_name": "Charles Harris",
+      "risk_level": "HIGH",
+      "sepsis_confirmed": true,
+      "qsofa_score": 2,
+      "sofa_score": 6,
+      "success": true,
+      "latency": 3444.4944858551025,
+      "num_insights": 4,
+      "insights": [
+        {
+          "severity": "critical",
+          "category": "sepsis",
+          "title": "SIRS Criteria Met with Hemodynamic Instability",
+          "description": "SIRS 4/4 with HR 115 bpm, Temp 39.2\u00b0C, RR 28, BP 92/58; high risk for septic shock.",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "alert-triangle",
+          "ts": "2025-11-14T19:23:02.618903Z",
+          "id": "4-0"
+        },
+        {
+          "severity": "critical",
+          "category": "labs",
+          "title": "Marked Leukocytosis and Rising Lactate",
+          "description": "WBC increased to 20.5 K/\u00b5L (+2.7), lactate up to 3.2 mmol/L (+0.6), indicating worsening infection and hypoperfusion.",
+          "agent": "Lab Analysis Agent",
+          "icon": "beaker",
+          "ts": "2025-11-14T19:21:02.618903Z",
+          "id": "4-1"
+        },
+        {
+          "severity": "warning",
+          "category": "hemodynamics",
+          "title": "Hypotension and Tachycardia Detected",
+          "description": "BP decreased to 92/58 mmHg, HR up to 115 bpm (+13.0), suggesting early shock.",
+          "agent": "Clinical Deterioration Agent",
+          "icon": "trending-up",
+          "ts": "2025-11-14T19:19:02.618903Z",
+          "id": "4-2"
+        },
+        {
+          "severity": "info",
+          "category": "monitoring",
+          "title": "High Sepsis Risk Score Noted",
+          "description": "Sepsis risk score is 85/100 (HIGH RISK); requires frequent reassessment.",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "activity",
+          "ts": "2025-11-14T19:17:02.618903Z",
+          "id": "4-3"
+        }
+      ]
+    },
+    {
+      "patient_id": "5",
+      "patient_name": "Margaret Foster",
+      "risk_level": "LOW",
+      "sepsis_confirmed": false,
+      "qsofa_score": 0,
+      "sofa_score": 1,
+      "success": true,
+      "latency": 2204.535722732544,
+      "num_insights": 3,
+      "insights": [
+        {
+          "severity": "info",
+          "category": "sepsis",
+          "title": "Low Sepsis Risk and No SIRS Criteria",
+          "description": "Current risk score is 19/100 (low) and SIRS 0/4; no sepsis warning signs present.",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "thermometer",
+          "ts": "2025-11-14T19:23:04.824073Z",
+          "id": "5-0"
+        },
+        {
+          "severity": "info",
+          "category": "hemodynamics",
+          "title": "Stable Vitals Over 12 Hours",
+          "description": "BP 122/68, HR 85 bpm (down 2.5 bpm), Temp 37.5\u00b0C (down 0.1\u00b0C), RR 18; no concerning changes.",
+          "agent": "Clinical Deterioration Agent",
+          "icon": "stethoscope",
+          "ts": "2025-11-14T19:21:04.824073Z",
+          "id": "5-1"
+        },
+        {
+          "severity": "info",
+          "category": "labs",
+          "title": "Stable WBC and Lactate Levels",
+          "description": "WBC remains stable at 10.5 K/\u00b5L, lactate at 1.5 mmol/L; no upward trends.",
+          "agent": "Lab Analysis Agent",
+          "icon": "beaker",
+          "ts": "2025-11-14T19:19:04.824073Z",
+          "id": "5-2"
+        }
+      ]
+    },
+    {
+      "patient_id": "6",
+      "patient_name": "Elizabeth Garcia",
+      "risk_level": "LOW",
+      "sepsis_confirmed": false,
+      "qsofa_score": 0,
+      "sofa_score": 0,
+      "success": true,
+      "latency": 2410.402774810791,
+      "num_insights": 3,
+      "insights": [
+        {
+          "severity": "info",
+          "category": "sepsis",
+          "title": "Low Sepsis Risk and No SIRS Criteria",
+          "description": "Current sepsis risk score is 23/100 with SIRS 0/4; patient stable on antibiotics.",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "thermometer",
+          "ts": "2025-11-14T19:23:07.234633Z",
+          "id": "6-0"
+        },
+        {
+          "severity": "info",
+          "category": "labs",
+          "title": "Stable Lab Values Over 12 Hours",
+          "description": "WBC stable at 10.5 K/\u00b5L, lactate mildly elevated at 1.4 mmol/L with no upward trend.",
+          "agent": "Lab Analysis Agent",
+          "icon": "beaker",
+          "ts": "2025-11-14T19:21:07.234633Z",
+          "id": "6-1"
+        },
+        {
+          "severity": "info",
+          "category": "hemodynamics",
+          "title": "Stable Hemodynamic Parameters",
+          "description": "BP 125/75, HR 85 bpm, and RR 18 with minimal change over 12 hours.",
+          "agent": "Clinical Deterioration Agent",
+          "icon": "stethoscope",
+          "ts": "2025-11-14T19:19:07.234633Z",
+          "id": "6-2"
+        }
+      ]
+    },
+    {
+      "patient_id": "7",
+      "patient_name": "Patricia Wilson",
+      "risk_level": "LOW",
+      "sepsis_confirmed": false,
+      "qsofa_score": 0,
+      "sofa_score": 1,
+      "success": true,
+      "latency": 2599.6315479278564,
+      "num_insights": 3,
+      "insights": [
+        {
+          "severity": "info",
+          "category": "sepsis",
+          "title": "No SIRS Criteria Detected",
+          "description": "SIRS criteria 0/4; vital signs stable and no acute sepsis indicators.",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "thermometer",
+          "ts": "2025-11-14T19:23:09.834493Z",
+          "id": "7-0"
+        },
+        {
+          "severity": "info",
+          "category": "labs",
+          "title": "Stable Lactate and WBC Levels",
+          "description": "Lactate remains low at 1.3 mmol/L; WBC mildly elevated at 10.5 K/\u00b5L with minimal change.",
+          "agent": "Lab Analysis Agent",
+          "icon": "beaker",
+          "ts": "2025-11-14T19:21:09.834493Z",
+          "id": "7-1"
+        },
+        {
+          "severity": "info",
+          "category": "monitoring",
+          "title": "Low Sepsis Risk Score",
+          "description": "Current sepsis risk score is 29/100 (LOW RISK); continue routine monitoring.",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "activity",
+          "ts": "2025-11-14T19:19:09.834493Z",
+          "id": "7-2"
+        }
+      ]
+    },
+    {
+      "patient_id": "8",
+      "patient_name": "Robert Williams",
+      "risk_level": "LOW",
+      "sepsis_confirmed": false,
+      "qsofa_score": 0,
+      "sofa_score": 1,
+      "success": true,
+      "latency": 2478.0399799346924,
+      "num_insights": 3,
+      "insights": [
+        {
+          "severity": "success",
+          "category": "sepsis",
+          "title": "Low sepsis risk, SIRS 0/4",
+          "description": "Current risk score is 22/100 with no SIRS criteria met.",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "stethoscope",
+          "ts": "2025-11-14T19:23:12.313003Z",
+          "id": "8-0"
+        },
+        {
+          "severity": "info",
+          "category": "hemodynamics",
+          "title": "Stable hemodynamics and vitals",
+          "description": "BP 128/78, HR 82 bpm, Temp 37.2\u00b0C, RR 16\u2014no concerning trends.",
+          "agent": "Clinical Deterioration Agent",
+          "icon": "activity",
+          "ts": "2025-11-14T19:21:12.313003Z",
+          "id": "8-1"
+        },
+        {
+          "severity": "info",
+          "category": "labs",
+          "title": "Labs within normal limits",
+          "description": "WBC 9.2 K/\u00b5L, lactate 1.1 mmol/L, minimal 12h change.",
+          "agent": "Lab Analysis Agent",
+          "icon": "beaker",
+          "ts": "2025-11-14T19:19:12.313003Z",
+          "id": "8-2"
+        }
+      ]
+    },
+    {
+      "patient_id": "9",
+      "patient_name": "Mary Johnson",
+      "risk_level": "MODERATE",
+      "sepsis_confirmed": true,
+      "qsofa_score": 1,
+      "sofa_score": 2,
+      "success": true,
+      "latency": 4336.07816696167,
+      "num_insights": 4,
+      "insights": [
+        {
+          "severity": "critical",
+          "category": "sepsis",
+          "title": "SIRS 3/4 with Rising Lactate",
+          "description": "Patient meets 3/4 SIRS criteria (HR 98, Temp 38.8\u00b0C, WBC 16.5) and lactate has increased to 2.1 mmol/L.",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "alert-triangle",
+          "ts": "2025-11-14T19:23:16.649081Z",
+          "id": "9-0"
+        },
+        {
+          "severity": "warning",
+          "category": "hemodynamics",
+          "title": "Blood Pressure Trending Lower",
+          "description": "BP decreased to 110/70; monitor for further hypotension given infection risk.",
+          "agent": "Clinical Deterioration Agent",
+          "icon": "trending-up",
+          "ts": "2025-11-14T19:21:16.649081Z",
+          "id": "9-1"
+        },
+        {
+          "severity": "warning",
+          "category": "labs",
+          "title": "WBC and Temperature Rising",
+          "description": "WBC rose 13.8% to 16.5 K/\u00b5L and temperature increased to 38.8\u00b0C in 12 hours.",
+          "agent": "Lab Analysis Agent",
+          "icon": "beaker",
+          "ts": "2025-11-14T19:19:16.649081Z",
+          "id": "9-2"
+        },
+        {
+          "severity": "info",
+          "category": "monitoring",
+          "title": "Devices Increase Infection Risk",
+          "description": "Foley catheter in place for 7 days and IV line for 2 days; continue close monitoring.",
+          "agent": "Sepsis Prevention Agent",
+          "icon": "stethoscope",
+          "ts": "2025-11-14T19:17:16.649081Z",
+          "id": "9-3"
+        }
+      ]
+    },
+    {
+      "patient_id": "10",
+      "patient_name": "George Anderson",
+      "risk_level": "MODERATE",
+      "sepsis_confirmed": true,
+      "qsofa_score": 1,
+      "sofa_score": 3,
+      "success": true,
+      "latency": 3475.465774536133,
+      "num_insights": 4,
+      "insights": [
+        {
+          "severity": "critical",
+          "category": "sepsis",
+          "title": "SIRS 3/4 with Worsening Vitals",
+          "description": "HR 102 bpm, Temp 38.6\u00b0C, RR 24, WBC 15.8 K/\u00b5L; meets 3/4 SIRS criteria with rising trends.",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "alert-triangle",
+          "ts": "2025-11-14T19:23:20.125002Z",
+          "id": "10-0"
+        },
+        {
+          "severity": "warning",
+          "category": "hemodynamics",
+          "title": "Hypotension with Rising Lactate",
+          "description": "BP at 108/68 mmHg, lactate increased to 2.3 mmol/L (+0.1), signaling possible tissue hypoperfusion.",
+          "agent": "Clinical Deterioration Agent",
+          "icon": "trending-up",
+          "ts": "2025-11-14T19:21:20.125002Z",
+          "id": "10-1"
+        },
+        {
+          "severity": "warning",
+          "category": "labs",
+          "title": "Leukocytosis and Upward WBC Trend",
+          "description": "WBC increased to 15.8 K/\u00b5L (+1.0), consistent with ongoing inflammatory response.",
+          "agent": "Lab Analysis Agent",
+          "icon": "beaker",
+          "ts": "2025-11-14T19:19:20.125002Z",
+          "id": "10-2"
+        },
+        {
+          "severity": "info",
+          "category": "monitoring",
+          "title": "Moderate Sepsis Risk Score",
+          "description": "Sepsis risk score is 58/100; continue enhanced monitoring and early intervention.",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "activity",
+          "ts": "2025-11-14T19:17:20.125002Z",
+          "id": "10-3"
+        }
+      ]
+    },
+    {
+      "patient_id": "11",
+      "patient_name": "David Rodriguez",
+      "risk_level": "MODERATE",
+      "sepsis_confirmed": true,
+      "qsofa_score": 0,
+      "sofa_score": 2,
+      "success": true,
+      "latency": 3466.280221939087,
+      "num_insights": 4,
+      "insights": [
+        {
+          "severity": "critical",
+          "category": "sepsis",
+          "title": "SIRS 3/4 with Elevated Heart Rate",
+          "description": "Patient meets 3/4 SIRS criteria (HR 110, Temp 38.4\u00b0C, WBC 16.2 K/\u00b5L) post-debridement.",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "alert-triangle",
+          "ts": "2025-11-14T19:23:23.591498Z",
+          "id": "11-0"
+        },
+        {
+          "severity": "warning",
+          "category": "hemodynamics",
+          "title": "Borderline Hypotension with Tachycardia",
+          "description": "BP 102/65 with HR rising to 110 bpm; trend suggests potential hemodynamic instability.",
+          "agent": "Clinical Deterioration Agent",
+          "icon": "trending-up",
+          "ts": "2025-11-14T19:21:23.591498Z",
+          "id": "11-1"
+        },
+        {
+          "severity": "warning",
+          "category": "labs",
+          "title": "Elevated Inflammatory Markers Persist",
+          "description": "WBC remains high at 16.2 K/\u00b5L, lactate moderately elevated at 2.4 mmol/L.",
+          "agent": "Lab Analysis Agent",
+          "icon": "beaker",
+          "ts": "2025-11-14T19:19:23.591498Z",
+          "id": "11-2"
+        },
+        {
+          "severity": "info",
+          "category": "monitoring",
+          "title": "Risk Score Stable at Moderate",
+          "description": "Current risk score is 55/100; continue close monitoring due to ongoing risk.",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "activity",
+          "ts": "2025-11-14T19:17:23.591498Z",
+          "id": "11-3"
+        }
+      ]
+    },
+    {
+      "patient_id": "12",
+      "patient_name": "Thomas King",
+      "risk_level": "MODERATE",
+      "sepsis_confirmed": false,
+      "qsofa_score": 0,
+      "sofa_score": 2,
+      "success": true,
+      "latency": 3726.3073921203613,
+      "num_insights": 4,
+      "insights": [
+        {
+          "severity": "warning",
+          "category": "sepsis",
+          "title": "SIRS Criteria Met with Rising Infection Markers",
+          "description": "Patient meets 2/4 SIRS (HR 96 bpm, Temp 38.5\u00b0C) with WBC 14.8 K/\u00b5L and wound infection.",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "alert-triangle",
+          "ts": "2025-11-14T19:23:27.318024Z",
+          "id": "12-0"
+        },
+        {
+          "severity": "warning",
+          "category": "labs",
+          "title": "Leukocytosis Trending Upwards",
+          "description": "WBC increased from 13.2 to 14.8 K/\u00b5L (+8.2%) over 12 hours.",
+          "agent": "Lab Analysis Agent",
+          "icon": "beaker",
+          "ts": "2025-11-14T19:21:27.318024Z",
+          "id": "12-1"
+        },
+        {
+          "severity": "info",
+          "category": "hemodynamics",
+          "title": "Stable Hemodynamic Parameters",
+          "description": "BP 112/70 mmHg and RR 20/min remain within normal limits.",
+          "agent": "Clinical Deterioration Agent",
+          "icon": "stethoscope",
+          "ts": "2025-11-14T19:19:27.318024Z",
+          "id": "12-2"
+        },
+        {
+          "severity": "warning",
+          "category": "labs",
+          "title": "Lactate Slightly Elevated and Rising",
+          "description": "Lactate increased from 1.6 to 1.9 mmol/L (+6.7%) over 12 hours.",
+          "agent": "Lab Analysis Agent",
+          "icon": "beaker",
+          "ts": "2025-11-14T19:17:27.318024Z",
+          "id": "12-3"
+        }
+      ]
+    },
+    {
+      "patient_id": "13",
+      "patient_name": "Andrew Miller",
+      "risk_level": "LOW",
+      "sepsis_confirmed": false,
+      "qsofa_score": 0,
+      "sofa_score": 0,
+      "success": true,
+      "latency": 2199.852228164673,
+      "num_insights": 3,
+      "insights": [
+        {
+          "severity": "info",
+          "category": "sepsis",
+          "title": "Low sepsis risk, no SIRS criteria",
+          "description": "Current risk score is 21/100 and SIRS 0/4; continue routine monitoring.",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "stethoscope",
+          "ts": "2025-11-14T19:23:29.518317Z",
+          "id": "13-0"
+        },
+        {
+          "severity": "info",
+          "category": "labs",
+          "title": "WBC and lactate within acceptable range",
+          "description": "WBC decreased to 10.5 K/\u00b5L, lactate stable at 1.5 mmol/L over 12 hours.",
+          "agent": "Lab Analysis Agent",
+          "icon": "beaker",
+          "ts": "2025-11-14T19:21:29.518317Z",
+          "id": "13-1"
+        },
+        {
+          "severity": "info",
+          "category": "hemodynamics",
+          "title": "Stable vital signs over 12 hours",
+          "description": "HR 85 bpm, BP 122/78, Temp 37.5\u00b0C, RR 18; no significant deterioration detected.",
+          "agent": "Clinical Deterioration Agent",
+          "icon": "activity",
+          "ts": "2025-11-14T19:19:29.518317Z",
+          "id": "13-2"
+        }
+      ]
+    },
+    {
+      "patient_id": "14",
+      "patient_name": "Angela Thompson",
+      "risk_level": "LOW",
+      "sepsis_confirmed": false,
+      "qsofa_score": 0,
+      "sofa_score": 3,
+      "success": true,
+      "latency": 2889.9638652801514,
+      "num_insights": 3,
+      "insights": [
+        {
+          "severity": "info",
+          "category": "sepsis",
+          "title": "Low Sepsis Risk Score Maintained",
+          "description": "Current sepsis risk score is 25/100 with 0/4 SIRS criteria.",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "stethoscope",
+          "ts": "2025-11-14T19:23:32.408462Z",
+          "id": "14-0"
+        },
+        {
+          "severity": "info",
+          "category": "labs",
+          "title": "WBC Trending Downward, Within Range",
+          "description": "WBC decreased by 0.9 K/\u00b5L (7%) to 10.5 K/\u00b5L.",
+          "agent": "Lab Analysis Agent",
+          "icon": "beaker",
+          "ts": "2025-11-14T19:21:32.408462Z",
+          "id": "14-1"
+        },
+        {
+          "severity": "info",
+          "category": "hemodynamics",
+          "title": "Stable Vitals Without Deterioration",
+          "description": "HR 85 bpm, BP 108/66, Temp 37.5\u00b0C, RR 18 all stable over 12 hours.",
+          "agent": "Clinical Deterioration Agent",
+          "icon": "activity",
+          "ts": "2025-11-14T19:19:32.408462Z",
+          "id": "14-2"
+        }
+      ]
+    },
+    {
+      "patient_id": "15",
+      "patient_name": "Linda Martinez",
+      "risk_level": "LOW",
+      "sepsis_confirmed": false,
+      "qsofa_score": 0,
+      "sofa_score": 0,
+      "success": true,
+      "latency": 2876.2147426605225,
+      "num_insights": 3,
+      "insights": [
+        {
+          "severity": "info",
+          "category": "sepsis",
+          "title": "Low Sepsis Risk and Stable SIRS",
+          "description": "Risk score is 31/100 (low), SIRS 1/4; no escalation in sepsis risk.",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "activity",
+          "ts": "2025-11-14T19:23:35.285026Z",
+          "id": "15-0"
+        },
+        {
+          "severity": "info",
+          "category": "labs",
+          "title": "Stable Inflammatory Markers",
+          "description": "WBC stable at 10.5 K/\u00b5L, lactate 1.5 mmol/L with no upward trend.",
+          "agent": "Lab Analysis Agent",
+          "icon": "beaker",
+          "ts": "2025-11-14T19:21:35.285026Z",
+          "id": "15-1"
+        },
+        {
+          "severity": "info",
+          "category": "hemodynamics",
+          "title": "Stable Vital Signs Over 12 Hours",
+          "description": "HR 85 bpm, BP 128/82, Temp 37.5\u00b0C, RR 18; no significant changes.",
+          "agent": "Clinical Deterioration Agent",
+          "icon": "stethoscope",
+          "ts": "2025-11-14T19:19:35.285026Z",
+          "id": "15-2"
+        }
+      ]
+    },
+    {
+      "patient_id": "16",
+      "patient_name": "Helen Martinez",
+      "risk_level": "LOW",
+      "sepsis_confirmed": false,
+      "qsofa_score": 0,
+      "sofa_score": 2,
+      "success": true,
+      "latency": 2957.7808380126953,
+      "num_insights": 3,
+      "insights": [
+        {
+          "severity": "info",
+          "category": "sepsis",
+          "title": "Low Sepsis Risk Detected",
+          "description": "Risk score is 33/100 with 1/4 SIRS criteria; no new sepsis triggers.",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "activity",
+          "ts": "2025-11-14T19:23:38.242969Z",
+          "id": "16-0"
+        },
+        {
+          "severity": "info",
+          "category": "labs",
+          "title": "Stable Labs and Lactate",
+          "description": "WBC is 10.5 K/\u00b5L (down 0.1), lactate stable at 1.5 mmol/L.",
+          "agent": "Lab Analysis Agent",
+          "icon": "beaker",
+          "ts": "2025-11-14T19:21:38.242969Z",
+          "id": "16-1"
+        },
+        {
+          "severity": "info",
+          "category": "hemodynamics",
+          "title": "Stable Hemodynamic Parameters",
+          "description": "BP 112/68, HR 85 bpm, RR 18, Temp 37.5\u00b0C; minimal changes over 12 hours.",
+          "agent": "Clinical Deterioration Agent",
+          "icon": "stethoscope",
+          "ts": "2025-11-14T19:19:38.242969Z",
+          "id": "16-2"
+        }
+      ]
+    },
+    {
+      "patient_id": "17",
+      "patient_name": "Rachel Green",
+      "risk_level": "LOW",
+      "sepsis_confirmed": false,
+      "qsofa_score": 0,
+      "sofa_score": 2,
+      "success": true,
+      "latency": 2424.750566482544,
+      "num_insights": 3,
+      "insights": [
+        {
+          "severity": "info",
+          "category": "sepsis",
+          "title": "Low Sepsis Risk, 1/4 SIRS Criteria",
+          "description": "Current risk score is 35/100 with only 1 SIRS criterion met (WBC 10.5 K/\u00b5L).",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "beaker",
+          "ts": "2025-11-14T19:23:40.667959Z",
+          "id": "17-0"
+        },
+        {
+          "severity": "info",
+          "category": "labs",
+          "title": "Stable Lactate and WBC Values",
+          "description": "Lactate remains stable at 1.5 mmol/L; WBC decreased slightly to 10.5 K/\u00b5L.",
+          "agent": "Lab Analysis Agent",
+          "icon": "beaker",
+          "ts": "2025-11-14T19:21:40.667959Z",
+          "id": "17-1"
+        },
+        {
+          "severity": "info",
+          "category": "hemodynamics",
+          "title": "Stable Vitals Without Deterioration",
+          "description": "HR 85 bpm, BP 118/72, Temp 37.5\u00b0C, RR 18\u2014all within normal range.",
+          "agent": "Clinical Deterioration Agent",
+          "icon": "stethoscope",
+          "ts": "2025-11-14T19:19:40.667959Z",
+          "id": "17-2"
+        }
+      ]
+    },
+    {
+      "patient_id": "18",
+      "patient_name": "Jennifer Taylor",
+      "risk_level": "LOW",
+      "sepsis_confirmed": false,
+      "qsofa_score": 0,
+      "sofa_score": 0,
+      "success": true,
+      "latency": 2663.59281539917,
+      "num_insights": 3,
+      "insights": [
+        {
+          "severity": "success",
+          "category": "sepsis",
+          "title": "Sepsis Risk Remains Low",
+          "description": "Risk score is 28/100 with 1/4 SIRS criteria; patient remains low risk for sepsis.",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "stethoscope",
+          "ts": "2025-11-14T19:23:43.331911Z",
+          "id": "18-0"
+        },
+        {
+          "severity": "success",
+          "category": "labs",
+          "title": "Improvement in Inflammatory Markers",
+          "description": "WBC decreased 14.2\u219211.8 K/\u00b5L and lactate down 1.6\u21921.3 mmol/L over 12 hours.",
+          "agent": "Lab Analysis Agent",
+          "icon": "beaker",
+          "ts": "2025-11-14T19:21:43.331911Z",
+          "id": "18-1"
+        },
+        {
+          "severity": "info",
+          "category": "hemodynamics",
+          "title": "Stable Vital Signs Documented",
+          "description": "HR 84 bpm, BP 118/74, temp 37.6\u00b0C, RR 16; all within normal limits.",
+          "agent": "Clinical Deterioration Agent",
+          "icon": "activity",
+          "ts": "2025-11-14T19:19:43.331911Z",
+          "id": "18-2"
+        }
+      ]
+    },
+    {
+      "patient_id": "19",
+      "patient_name": "Dorothy Wilson",
+      "risk_level": "LOW",
+      "sepsis_confirmed": false,
+      "qsofa_score": 0,
+      "sofa_score": 0,
+      "success": true,
+      "latency": 2217.236280441284,
+      "num_insights": 3,
+      "insights": [
+        {
+          "severity": "info",
+          "category": "sepsis",
+          "title": "Low Sepsis Risk, Stable SIRS",
+          "description": "SIRS criteria 1/4 and risk score 22/100 indicate low sepsis risk.",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "thermometer",
+          "ts": "2025-11-14T19:23:45.549365Z",
+          "id": "19-0"
+        },
+        {
+          "severity": "info",
+          "category": "labs",
+          "title": "Improved WBC and Stable Lactate",
+          "description": "WBC decreased to 11.2 K/\u00b5L (\u21934%), lactate stable at 1.2 mmol/L.",
+          "agent": "Lab Analysis Agent",
+          "icon": "beaker",
+          "ts": "2025-11-14T19:21:45.549365Z",
+          "id": "19-1"
+        },
+        {
+          "severity": "info",
+          "category": "hemodynamics",
+          "title": "Stable Vitals and Hemodynamics",
+          "description": "BP 132/84, HR 78 bpm, RR 16, Temp 37.8\u00b0C with minimal change over 12 hours.",
+          "agent": "Clinical Deterioration Agent",
+          "icon": "activity",
+          "ts": "2025-11-14T19:19:45.549365Z",
+          "id": "19-2"
+        }
+      ]
+    },
+    {
+      "patient_id": "20",
+      "patient_name": "Christopher Lee",
+      "risk_level": "LOW",
+      "sepsis_confirmed": false,
+      "qsofa_score": 0,
+      "sofa_score": 1,
+      "success": true,
+      "latency": 2607.7799797058105,
+      "num_insights": 3,
+      "insights": [
+        {
+          "severity": "info",
+          "category": "sepsis",
+          "title": "Sepsis risk remains low",
+          "description": "Risk score 18/100 and SIRS 0/4; no sepsis criteria met.",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "thermometer",
+          "ts": "2025-11-14T19:23:48.157513Z",
+          "id": "20-0"
+        },
+        {
+          "severity": "info",
+          "category": "hemodynamics",
+          "title": "Stable vital signs maintained",
+          "description": "HR 82 bpm, BP 132/84, Temp 37.0\u00b0C, RR 16 all within normal limits.",
+          "agent": "Clinical Deterioration Agent",
+          "icon": "stethoscope",
+          "ts": "2025-11-14T19:21:48.157513Z",
+          "id": "20-1"
+        },
+        {
+          "severity": "success",
+          "category": "labs",
+          "title": "No concerning lab trends detected",
+          "description": "WBC decreased to 8.5 K/\u00b5L, lactate stable at 1.1 mmol/L.",
+          "agent": "Lab Analysis Agent",
+          "icon": "beaker",
+          "ts": "2025-11-14T19:19:48.157513Z",
+          "id": "20-2"
+        }
+      ]
+    },
+    {
+      "patient_id": "21",
+      "patient_name": "Patricia Davis",
+      "risk_level": "LOW",
+      "sepsis_confirmed": false,
+      "qsofa_score": 0,
+      "sofa_score": 0,
+      "success": true,
+      "latency": 2665.9748554229736,
+      "num_insights": 3,
+      "insights": [
+        {
+          "severity": "info",
+          "category": "sepsis",
+          "title": "Low Sepsis Risk and No SIRS Criteria",
+          "description": "Current risk score 15/100 with 0/4 SIRS criteria, no signs of sepsis.",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "activity",
+          "ts": "2025-11-14T19:23:50.823945Z",
+          "id": "21-0"
+        },
+        {
+          "severity": "info",
+          "category": "hemodynamics",
+          "title": "Stable Hemodynamics and Vitals",
+          "description": "BP 118/76, HR 82 bpm, RR 16, Temp 37.4\u00b0C, all within normal limits.",
+          "agent": "Clinical Deterioration Agent",
+          "icon": "stethoscope",
+          "ts": "2025-11-14T19:21:50.823945Z",
+          "id": "21-1"
+        },
+        {
+          "severity": "info",
+          "category": "labs",
+          "title": "Normal Inflammatory and Metabolic Labs",
+          "description": "WBC 10.5 K/\u00b5L (-0.3 trend), Lactate 1.1 mmol/L (no change).",
+          "agent": "Lab Analysis Agent",
+          "icon": "beaker",
+          "ts": "2025-11-14T19:19:50.823945Z",
+          "id": "21-2"
+        }
+      ]
+    },
+    {
+      "patient_id": "22",
+      "patient_name": "Jessica Davis",
+      "risk_level": "LOW",
+      "sepsis_confirmed": false,
+      "qsofa_score": 0,
+      "sofa_score": 0,
+      "success": true,
+      "latency": 2508.3513259887695,
+      "num_insights": 3,
+      "insights": [
+        {
+          "severity": "success",
+          "category": "sepsis",
+          "title": "No SIRS Criteria Detected",
+          "description": "Patient meets 0/4 SIRS criteria; sepsis risk currently very low.",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "stethoscope",
+          "ts": "2025-11-14T19:23:53.332026Z",
+          "id": "22-0"
+        },
+        {
+          "severity": "info",
+          "category": "monitoring",
+          "title": "Stable Hemodynamics and Vitals",
+          "description": "BP 118/74, HR 76, Temp 36.9\u00b0C, RR 14\u2014within normal limits.",
+          "agent": "Clinical Deterioration Agent",
+          "icon": "activity",
+          "ts": "2025-11-14T19:21:53.332026Z",
+          "id": "22-1"
+        },
+        {
+          "severity": "success",
+          "category": "labs",
+          "title": "Improving Lab Trends Documented",
+          "description": "WBC decreased to 7.8 K/\u00b5L, lactate down to 1.0 mmol/L over 12 hours.",
+          "agent": "Lab Analysis Agent",
+          "icon": "beaker",
+          "ts": "2025-11-14T19:19:53.332026Z",
+          "id": "22-2"
+        }
+      ]
+    },
+    {
+      "patient_id": "23",
+      "patient_name": "Nancy Clark",
+      "risk_level": "LOW",
+      "sepsis_confirmed": false,
+      "qsofa_score": 0,
+      "sofa_score": 0,
+      "success": true,
+      "latency": 2590.937614440918,
+      "num_insights": 3,
+      "insights": [
+        {
+          "severity": "success",
+          "category": "sepsis",
+          "title": "No SIRS Criteria Detected",
+          "description": "Patient meets 0/4 SIRS criteria; sepsis unlikely at this time.",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "stethoscope",
+          "ts": "2025-11-14T19:23:55.922787Z",
+          "id": "23-0"
+        },
+        {
+          "severity": "success",
+          "category": "labs",
+          "title": "WBC Trending Downwards",
+          "description": "WBC decreased from 11.5\u21929.8 K/\u00b5L over 12 hours.",
+          "agent": "Lab Analysis Agent",
+          "icon": "beaker",
+          "ts": "2025-11-14T19:21:55.922787Z",
+          "id": "23-1"
+        },
+        {
+          "severity": "info",
+          "category": "monitoring",
+          "title": "Stable Vitals and Low Risk Score",
+          "description": "HR 76 bpm, BP 120/78, Temp 37.2\u00b0C, Risk Score 12/100.",
+          "agent": "Clinical Deterioration Agent",
+          "icon": "activity",
+          "ts": "2025-11-14T19:19:55.922787Z",
+          "id": "23-2"
+        }
+      ]
+    },
+    {
+      "patient_id": "24",
+      "patient_name": "Kevin Martinez",
+      "risk_level": "LOW",
+      "sepsis_confirmed": false,
+      "qsofa_score": 0,
+      "sofa_score": 0,
+      "success": true,
+      "latency": 2470.332145690918,
+      "num_insights": 3,
+      "insights": [
+        {
+          "severity": "info",
+          "category": "sepsis",
+          "title": "No SIRS Criteria Met, Low Sepsis Risk",
+          "description": "SIRS 0/4 and risk score 10/100 indicate low likelihood of sepsis progression.",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "stethoscope",
+          "ts": "2025-11-14T19:23:58.393772Z",
+          "id": "24-0"
+        },
+        {
+          "severity": "success",
+          "category": "hemodynamics",
+          "title": "Vital Signs Trending Toward Baseline",
+          "description": "HR decreased 88\u219274 bpm, BP stable at 126/80, Temp decreased 37.8\u219237.1\u00b0C.",
+          "agent": "Clinical Deterioration Agent",
+          "icon": "activity",
+          "ts": "2025-11-14T19:21:58.393772Z",
+          "id": "24-1"
+        },
+        {
+          "severity": "success",
+          "category": "labs",
+          "title": "Laboratory Values Improving or Stable",
+          "description": "WBC decreased 10.8\u21929.2 K/\u00b5L, lactate stable at 1.0 mmol/L.",
+          "agent": "Lab Analysis Agent",
+          "icon": "beaker",
+          "ts": "2025-11-14T19:19:58.393772Z",
+          "id": "24-2"
+        }
+      ]
+    },
+    {
+      "patient_id": "25",
+      "patient_name": "Emily Rodriguez",
+      "risk_level": "LOW",
+      "sepsis_confirmed": false,
+      "qsofa_score": 0,
+      "sofa_score": 0,
+      "success": true,
+      "latency": 2531.7022800445557,
+      "num_insights": 3,
+      "insights": [
+        {
+          "severity": "info",
+          "category": "sepsis",
+          "title": "No SIRS Criteria or Sepsis Detected",
+          "description": "SIRS 0/4, current risk score 9/100; no evidence of sepsis.",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "thermometer",
+          "ts": "2025-11-14T19:24:00.925960Z",
+          "id": "25-0"
+        },
+        {
+          "severity": "success",
+          "category": "hemodynamics",
+          "title": "Stable Vital Signs Maintained",
+          "description": "HR 78 bpm, BP 116/72, Temp 36.8\u00b0C, RR 16; all within normal limits.",
+          "agent": "Clinical Deterioration Agent",
+          "icon": "stethoscope",
+          "ts": "2025-11-14T19:22:00.925960Z",
+          "id": "25-1"
+        },
+        {
+          "severity": "success",
+          "category": "labs",
+          "title": "Normal WBC and Lactate Levels",
+          "description": "WBC 8.8 K/\u00b5L, Lactate 0.9 mmol/L; no concerning lab abnormalities.",
+          "agent": "Lab Analysis Agent",
+          "icon": "beaker",
+          "ts": "2025-11-14T19:20:00.925960Z",
+          "id": "25-2"
+        }
+      ]
+    },
+    {
+      "patient_id": "26",
+      "patient_name": "William Lee",
+      "risk_level": "LOW",
+      "sepsis_confirmed": false,
+      "qsofa_score": 0,
+      "sofa_score": 1,
+      "success": true,
+      "latency": 2498.991012573242,
+      "num_insights": 3,
+      "insights": [
+        {
+          "severity": "success",
+          "category": "sepsis",
+          "title": "No SIRS Criteria Met",
+          "description": "Patient currently meets 0/4 SIRS criteria with low sepsis risk score (8/100).",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "stethoscope",
+          "ts": "2025-11-14T19:24:03.425265Z",
+          "id": "26-0"
+        },
+        {
+          "severity": "info",
+          "category": "hemodynamics",
+          "title": "Stable Vital Signs Observed",
+          "description": "BP 128/78, HR 76 bpm, Temp 36.7\u00b0C, RR 16\u2014all within normal range.",
+          "agent": "Clinical Deterioration Agent",
+          "icon": "activity",
+          "ts": "2025-11-14T19:22:03.425265Z",
+          "id": "26-1"
+        },
+        {
+          "severity": "info",
+          "category": "labs",
+          "title": "Normal WBC and Lactate Levels",
+          "description": "WBC 8.2 K/\u00b5L and lactate 1.0 mmol/L stable over past 12 hours.",
+          "agent": "Lab Analysis Agent",
+          "icon": "beaker",
+          "ts": "2025-11-14T19:20:03.425265Z",
+          "id": "26-2"
+        }
+      ]
+    },
+    {
+      "patient_id": "27",
+      "patient_name": "Robert Anderson",
+      "risk_level": "LOW",
+      "sepsis_confirmed": false,
+      "qsofa_score": 0,
+      "sofa_score": 0,
+      "success": true,
+      "latency": 2377.485752105713,
+      "num_insights": 3,
+      "insights": [
+        {
+          "severity": "success",
+          "category": "hemodynamics",
+          "title": "Heart rate significantly improved",
+          "description": "Heart rate decreased from 118\u219282 bpm over 12 hours, now at 82 bpm.",
+          "agent": "Clinical Deterioration Agent",
+          "icon": "activity",
+          "ts": "2025-11-14T19:24:05.802939Z",
+          "id": "27-0"
+        },
+        {
+          "severity": "info",
+          "category": "sepsis",
+          "title": "No SIRS criteria met",
+          "description": "SIRS criteria 0/4, sepsis risk remains low.",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "stethoscope",
+          "ts": "2025-11-14T19:22:05.802939Z",
+          "id": "27-1"
+        },
+        {
+          "severity": "info",
+          "category": "labs",
+          "title": "Stable white blood cell count",
+          "description": "WBC decreased slightly to 7.5 K/\u00b5L, within normal limits.",
+          "agent": "Lab Analysis Agent",
+          "icon": "beaker",
+          "ts": "2025-11-14T19:20:05.802939Z",
+          "id": "27-2"
+        }
+      ]
+    },
+    {
+      "patient_id": "28",
+      "patient_name": "Susan Lewis",
+      "risk_level": "LOW",
+      "sepsis_confirmed": false,
+      "qsofa_score": 0,
+      "sofa_score": 0,
+      "success": true,
+      "latency": 2165.2116775512695,
+      "num_insights": 3,
+      "insights": [
+        {
+          "severity": "info",
+          "category": "sepsis",
+          "title": "No SIRS criteria met currently",
+          "description": "SIRS score is 0/4 and risk score remains low at 6/100.",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "thermometer",
+          "ts": "2025-11-14T19:24:07.968514Z",
+          "id": "28-0"
+        },
+        {
+          "severity": "success",
+          "category": "hemodynamics",
+          "title": "Stable vital signs maintained",
+          "description": "BP 138/82, HR 72, Temp 36.9\u00b0C, RR 14 show hemodynamic stability.",
+          "agent": "Clinical Deterioration Agent",
+          "icon": "stethoscope",
+          "ts": "2025-11-14T19:22:07.968514Z",
+          "id": "28-1"
+        },
+        {
+          "severity": "info",
+          "category": "labs",
+          "title": "Normal infection and metabolic labs",
+          "description": "WBC 7.8 K/\u00b5L and lactate 0.9 mmol/L remain within normal limits.",
+          "agent": "Lab Analysis Agent",
+          "icon": "beaker",
+          "ts": "2025-11-14T19:20:07.968514Z",
+          "id": "28-2"
+        }
+      ]
+    },
+    {
+      "patient_id": "29",
+      "patient_name": "Michael Chen",
+      "risk_level": "LOW",
+      "sepsis_confirmed": false,
+      "qsofa_score": 0,
+      "sofa_score": 0,
+      "success": true,
+      "latency": 2614.468812942505,
+      "num_insights": 3,
+      "insights": [
+        {
+          "severity": "info",
+          "category": "sepsis",
+          "title": "No SIRS Criteria Met, Low Sepsis Risk",
+          "description": "Current SIRS 0/4 and sepsis risk score 5/100; no signs of systemic infection.",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "thermometer",
+          "ts": "2025-11-14T19:24:10.583243Z",
+          "id": "29-0"
+        },
+        {
+          "severity": "info",
+          "category": "labs",
+          "title": "Stable Laboratory Values Noted",
+          "description": "WBC 7.2 K/\u00b5L, lactate 0.9 mmol/L with minimal 12-hour change.",
+          "agent": "Lab Analysis Agent",
+          "icon": "beaker",
+          "ts": "2025-11-14T19:22:10.583243Z",
+          "id": "29-1"
+        },
+        {
+          "severity": "info",
+          "category": "hemodynamics",
+          "title": "Stable Hemodynamic Parameters",
+          "description": "HR 72 bpm, BP 122/78, Temp 36.8\u00b0C, RR 14\u2014all within normal limits.",
+          "agent": "Clinical Deterioration Agent",
+          "icon": "stethoscope",
+          "ts": "2025-11-14T19:20:10.583243Z",
+          "id": "29-2"
+        }
+      ]
+    },
+    {
+      "patient_id": "30",
+      "patient_name": "Barbara White",
+      "risk_level": "LOW",
+      "sepsis_confirmed": false,
+      "qsofa_score": 0,
+      "sofa_score": 0,
+      "success": true,
+      "latency": 2275.733232498169,
+      "num_insights": 3,
+      "insights": [
+        {
+          "severity": "info",
+          "category": "monitoring",
+          "title": "Stable vital signs post-catheterization",
+          "description": "HR 70 bpm, Temp 36.8\u00b0C, RR 14, BP 124/76 are within normal limits.",
+          "agent": "Clinical Deterioration Agent",
+          "icon": "stethoscope",
+          "ts": "2025-11-14T19:24:12.859273Z",
+          "id": "30-0"
+        },
+        {
+          "severity": "info",
+          "category": "sepsis",
+          "title": "No SIRS criteria or sepsis indicators",
+          "description": "SIRS 0/4, lactate stable at 0.9 mmol/L, WBC 7.5 K/\u00b5L.",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "thermometer",
+          "ts": "2025-11-14T19:22:12.859273Z",
+          "id": "30-1"
+        },
+        {
+          "severity": "success",
+          "category": "labs",
+          "title": "Normal trending laboratory results",
+          "description": "WBC decreased slightly (-1.3%) to 7.5 K/\u00b5L; lactate unchanged at 0.9 mmol/L.",
+          "agent": "Lab Analysis Agent",
+          "icon": "beaker",
+          "ts": "2025-11-14T19:20:12.859273Z",
+          "id": "30-2"
+        }
+      ]
+    },
+    {
+      "patient_id": "31",
+      "patient_name": "Sarah Thompson",
+      "risk_level": "LOW",
+      "sepsis_confirmed": false,
+      "qsofa_score": 0,
+      "sofa_score": 0,
+      "success": true,
+      "latency": 2484.3480587005615,
+      "num_insights": 3,
+      "insights": [
+        {
+          "severity": "info",
+          "category": "sepsis",
+          "title": "Sepsis risk remains low",
+          "description": "Current risk score 3/100 with 0/4 SIRS criteria and stable vitals.",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "stethoscope",
+          "ts": "2025-11-14T19:24:15.343834Z",
+          "id": "31-0"
+        },
+        {
+          "severity": "info",
+          "category": "labs",
+          "title": "Stable WBC and lactate levels",
+          "description": "WBC at 6.8 K/\u00b5L and lactate at 0.8 mmol/L, no significant changes in 12 hours.",
+          "agent": "Lab Analysis Agent",
+          "icon": "beaker",
+          "ts": "2025-11-14T19:22:15.343834Z",
+          "id": "31-1"
+        },
+        {
+          "severity": "success",
+          "category": "monitoring",
+          "title": "No signs of clinical deterioration",
+          "description": "HR 68 bpm, Temp 36.9\u00b0C, RR 12, BP 115/72 all stable pre-operatively.",
+          "agent": "Clinical Deterioration Agent",
+          "icon": "activity",
+          "ts": "2025-11-14T19:20:15.343834Z",
+          "id": "31-2"
+        }
+      ]
+    },
+    {
+      "patient_id": "32",
+      "patient_name": "Daniel Kim",
+      "risk_level": "LOW",
+      "sepsis_confirmed": false,
+      "qsofa_score": 0,
+      "sofa_score": 0,
+      "success": true,
+      "latency": 2534.355640411377,
+      "num_insights": 3,
+      "insights": [
+        {
+          "severity": "info",
+          "category": "sepsis",
+          "title": "Low Sepsis Risk and No SIRS Criteria",
+          "description": "Current risk score 2/100 and SIRS 0/4; sepsis unlikely.",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "thermometer",
+          "ts": "2025-11-14T19:24:17.878404Z",
+          "id": "32-0"
+        },
+        {
+          "severity": "info",
+          "category": "hemodynamics",
+          "title": "Stable Vitals Over 12 Hours",
+          "description": "HR 68 bpm, BP 118/74, Temp 36.7\u00b0C, RR 12 with minimal changes.",
+          "agent": "Clinical Deterioration Agent",
+          "icon": "stethoscope",
+          "ts": "2025-11-14T19:22:17.878404Z",
+          "id": "32-1"
+        },
+        {
+          "severity": "success",
+          "category": "labs",
+          "title": "Normal Laboratory Results Maintained",
+          "description": "WBC 6.9 K/\u00b5L (\u21931.4%), lactate stable at 0.8 mmol/L.",
+          "agent": "Lab Analysis Agent",
+          "icon": "beaker",
+          "ts": "2025-11-14T19:20:17.878404Z",
+          "id": "32-2"
+        }
+      ]
+    },
+    {
+      "patient_id": "33",
+      "patient_name": "Steven Brown",
+      "risk_level": "LOW",
+      "sepsis_confirmed": false,
+      "qsofa_score": 0,
+      "sofa_score": 0,
+      "success": true,
+      "latency": 2243.948459625244,
+      "num_insights": 3,
+      "insights": [
+        {
+          "severity": "success",
+          "category": "sepsis",
+          "title": "No SIRS Criteria Detected",
+          "description": "0/4 SIRS criteria present, sepsis risk remains low.",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "stethoscope",
+          "ts": "2025-11-14T19:24:20.122533Z",
+          "id": "33-0"
+        },
+        {
+          "severity": "info",
+          "category": "labs",
+          "title": "Stable Lab Trends Observed",
+          "description": "WBC stable at 7.0 K/\u00b5L, lactate unchanged at 0.9 mmol/L.",
+          "agent": "Lab Analysis Agent",
+          "icon": "beaker",
+          "ts": "2025-11-14T19:22:20.122533Z",
+          "id": "33-1"
+        },
+        {
+          "severity": "info",
+          "category": "hemodynamics",
+          "title": "Stable Vital Signs Maintained",
+          "description": "HR 70 bpm, BP 124/78, Temp 36.8\u00b0C, RR 14\u2014all within normal limits.",
+          "agent": "Clinical Deterioration Agent",
+          "icon": "activity",
+          "ts": "2025-11-14T19:20:20.122533Z",
+          "id": "33-2"
+        }
+      ]
+    },
+    {
+      "patient_id": "34",
+      "patient_name": "Mark Thompson",
+      "risk_level": "LOW",
+      "sepsis_confirmed": false,
+      "qsofa_score": 0,
+      "sofa_score": 0,
+      "success": true,
+      "latency": 2530.2700996398926,
+      "num_insights": 3,
+      "insights": [
+        {
+          "severity": "info",
+          "category": "sepsis",
+          "title": "No SIRS Criteria Met, Low Sepsis Risk",
+          "description": "SIRS 0/4, current sepsis risk score 16/100, all vitals within normal limits.",
+          "agent": "Sepsis Monitoring Agent",
+          "icon": "thermometer",
+          "ts": "2025-11-14T19:24:22.652968Z",
+          "id": "34-0"
+        },
+        {
+          "severity": "info",
+          "category": "hemodynamics",
+          "title": "Stable Hemodynamics and Vitals",
+          "description": "BP 122/76, HR 78 bpm, RR 14, Temp 36.9\u00b0C; no significant changes over 12 hours.",
+          "agent": "Clinical Deterioration Agent",
+          "icon": "stethoscope",
+          "ts": "2025-11-14T19:22:22.652968Z",
+          "id": "34-1"
+        },
+        {
+          "severity": "info",
+          "category": "labs",
+          "title": "Stable Laboratory Values",
+          "description": "WBC 8.2 K/\u00b5L (\u21930.1), Lactate 1.0 mmol/L (no change); both within normal range.",
+          "agent": "Lab Analysis Agent",
+          "icon": "beaker",
+          "ts": "2025-11-14T19:20:22.652968Z",
+          "id": "34-2"
+        }
+      ]
+    }
+  ]
+}
