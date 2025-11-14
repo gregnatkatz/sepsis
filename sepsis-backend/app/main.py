@@ -483,56 +483,104 @@ Generate alert cards as JSON."""
 
 @app.get("/api/patients/{patient_id}/horizon-forecast")
 async def get_horizon_forecast(patient_id: str):
-    """Predictive Horizon Forecasting: 1h/3h/6h sepsis risk predictions with personalized baselines"""
+    """Predictive Horizon Forecasting: 1h/3h/6h sepsis risk predictions with personalized baselines using Azure OpenAI"""
     patient = next((p for p in MOCK_PATIENTS if p["id"] == patient_id), None)
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
     
     history_data = generate_12hour_history(patient)
     trends = calculate_trend_features(patient, history_data["history"])
+    ground_truth = patient.get('ground_truth', {})
     
-    baseline_risk = patient['risk_score']
+    system_prompt = """You are a predictive analytics AI specializing in sepsis risk forecasting.
+    Analyze patient trends and predict sepsis risk at 1-hour, 3-hour, and 6-hour horizons.
     
-    hr_velocity = trends['hr_change'] / 12  # per hour
-    temp_velocity = trends['temp_change'] / 12
-    lactate_velocity = trends['lactate_change'] / 12
-    
-    risk_velocity = 0
-    if hr_velocity > 0:
-        risk_velocity += hr_velocity * 0.5
-    if temp_velocity > 0:
-        risk_velocity += temp_velocity * 2
-    if lactate_velocity > 0:
-        risk_velocity += lactate_velocity * 5
-    
-    forecast_1h = min(100, max(0, baseline_risk + risk_velocity * 1))
-    forecast_3h = min(100, max(0, baseline_risk + risk_velocity * 3))
-    forecast_6h = min(100, max(0, baseline_risk + risk_velocity * 6))
-    
-    confidence = 0.85 if abs(trends['hr_pct_change']) < 10 else 0.65
-    
-    time_to_breach = None
-    if risk_velocity > 0 and baseline_risk < 70:
-        hours_to_breach = (70 - baseline_risk) / risk_velocity
-        if hours_to_breach <= 12:
-            time_to_breach = f"{hours_to_breach:.1f}h"
-    
-    return {
-        "patient_id": patient_id,
-        "current_risk": baseline_risk,
-        "forecasts": [
-            {"horizon": "1h", "risk": round(forecast_1h, 1), "confidence": confidence},
-            {"horizon": "3h", "risk": round(forecast_3h, 1), "confidence": confidence * 0.9},
-            {"horizon": "6h", "risk": round(forecast_6h, 1), "confidence": confidence * 0.8}
-        ],
-        "time_to_breach": time_to_breach,
-        "trend_direction": "rising" if risk_velocity > 0 else "stable" if risk_velocity == 0 else "falling",
-        "generated_at": datetime.utcnow().isoformat() + "Z"
+    Return ONLY valid JSON matching this exact schema:
+    {
+      "current_risk": 0-100,
+      "forecasts": [
+        {"horizon": "1h", "risk": 0-100, "confidence": 0.0-1.0},
+        {"horizon": "3h", "risk": 0-100, "confidence": 0.0-1.0},
+        {"horizon": "6h", "risk": 0-100, "confidence": 0.0-1.0}
+      ],
+      "time_to_breach": "X.Xh" or null,
+      "trend_direction": "rising|stable|falling",
+      "clinical_reasoning": "Brief explanation of forecast rationale"
     }
+    
+    Guidelines:
+    - Consider velocity of vital signs and lab trends
+    - Factor in SIRS criteria progression
+    - Account for current interventions and devices
+    - Confidence decreases with longer horizons
+    - time_to_breach: hours until risk exceeds 70 (if applicable)
+    - Be conservative but realistic based on clinical trajectory"""
+    
+    user_prompt = f"""Forecast sepsis risk for this patient:
+
+Patient: {patient['name']}, {patient['age']}y {patient['gender']} in {patient['room']}
+Diagnosis: {patient['diagnosis']}
+Current Risk Score: {patient['risk_score']}/100 ({patient['risk_level']} RISK)
+SIRS Criteria: {patient['sirs_criteria']}/4
+
+12-Hour Trends:
+- Heart Rate: {trends['hr_change']:+.1f} bpm ({trends['hr_pct_change']:+.1f}%), Current: {patient['vitals']['current']['heart_rate']} bpm, Peak: {trends['max_hr']} bpm
+- Temperature: {trends['temp_change']:+.1f}°C ({trends['temp_pct_change']:+.1f}%), Current: {patient['vitals']['current']['temperature']}°C, Peak: {trends['max_temp']}°C
+- WBC: {trends['wbc_change']:+.1f} K/µL ({trends['wbc_pct_change']:+.1f}%), Current: {patient['labs']['current']['wbc']} K/µL, Peak: {trends['max_wbc']} K/µL
+- Lactate: {trends['lactate_change']:+.1f} mmol/L ({trends['lactate_pct_change']:+.1f}%), Current: {patient['labs']['current']['lactate']} mmol/L, Peak: {trends['max_lactate']} mmol/L
+
+Current Vitals:
+- HR: {patient['vitals']['current']['heart_rate']} bpm, RR: {patient['vitals']['current']['respiratory_rate']}, BP: {patient['vitals']['current']['blood_pressure']}, SpO2: {patient['vitals']['current']['spo2']}%
+- Temp: {patient['vitals']['current']['temperature']}°C
+
+Current Labs:
+- WBC: {patient['labs']['current']['wbc']} K/µL, Lactate: {patient['labs']['current']['lactate']} mmol/L
+
+Devices: {', '.join([d['type'] + f" (Day {d['days']})" for d in patient['devices']])}
+
+Predict 1h/3h/6h sepsis risk with confidence levels and time-to-breach if applicable."""
+
+    try:
+        response = client.chat.completions.create(
+            model=os.getenv("AZURE_OPENAI_DEPLOYMENT_GPT41", "gpt-4.1"),
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.3,
+            max_tokens=800,
+            response_format={"type": "json_object"}
+        )
+        
+        content = response.choices[0].message.content
+        forecast_data = json.loads(content)
+        
+        return {
+            "patient_id": patient_id,
+            "generated_at": datetime.utcnow().isoformat() + "Z",
+            **forecast_data
+        }
+    except json.JSONDecodeError as e:
+        baseline_risk = patient['risk_score']
+        return {
+            "patient_id": patient_id,
+            "current_risk": baseline_risk,
+            "forecasts": [
+                {"horizon": "1h", "risk": baseline_risk, "confidence": 0.5},
+                {"horizon": "3h", "risk": baseline_risk, "confidence": 0.4},
+                {"horizon": "6h", "risk": baseline_risk, "confidence": 0.3}
+            ],
+            "time_to_breach": None,
+            "trend_direction": "stable",
+            "clinical_reasoning": "Unable to generate forecast. Using baseline risk.",
+            "generated_at": datetime.utcnow().isoformat() + "Z"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/patients/{patient_id}/next-best-action")
 async def get_next_best_action(patient_id: str):
-    """Next Best Action: Concrete recommendations with expected value and confidence"""
+    """Next Best Action: Concrete recommendations with expected value and confidence using Azure OpenAI"""
     patient = next((p for p in MOCK_PATIENTS if p["id"] == patient_id), None)
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
@@ -541,93 +589,107 @@ async def get_next_best_action(patient_id: str):
     trends = calculate_trend_features(patient, history_data["history"])
     ground_truth = patient.get('ground_truth', {})
     
-    actions = []
-    
     vitals = patient['vitals']['current']
     labs = patient['labs']['current']
-    
-    if labs['lactate'] > 2.0 or trends['lactate_change'] > 0.5:
-        actions.append({
-            "action_type": "lab",
-            "title": "Draw Lactate Now",
-            "rationale": f"Current lactate {labs['lactate']} mmol/L, trending up {trends['lactate_change']:+.1f}",
-            "expected_benefit": "high",
-            "confidence": 0.92,
-            "urgency": "immediate",
-            "order": 1
-        })
-    
-    if patient['sirs_criteria'] >= 2 and labs['wbc'] > 12:
-        actions.append({
-            "action_type": "lab",
-            "title": "Obtain Blood Cultures (2 sets)",
-            "rationale": f"SIRS {patient['sirs_criteria']}/4, WBC {labs['wbc']} K/µL",
-            "expected_benefit": "high",
-            "confidence": 0.88,
-            "urgency": "immediate",
-            "order": 2
-        })
-    
     bp_parts = vitals['blood_pressure'].split('/')
     map_pressure = (int(bp_parts[0]) + 2 * int(bp_parts[1])) / 3
-    if map_pressure < 65 or int(bp_parts[0]) < 90:
-        actions.append({
-            "action_type": "intervention",
-            "title": "Start 30 mL/kg Crystalloid Bolus",
-            "rationale": f"MAP {map_pressure:.0f} mmHg, SBP {bp_parts[0]} mmHg (hypotensive)",
-            "expected_benefit": "high",
-            "confidence": 0.95,
-            "urgency": "immediate",
-            "order": 3
-        })
     
-    if vitals['spo2'] < 92:
-        actions.append({
-            "action_type": "intervention",
-            "title": "Increase O2 Support",
-            "rationale": f"SpO2 {vitals['spo2']}% (hypoxemic)",
-            "expected_benefit": "medium",
-            "confidence": 0.85,
-            "urgency": "immediate",
-            "order": 4
-        })
+    system_prompt = """You are a clinical decision support AI specializing in sepsis management.
+    Generate prioritized clinical recommendations with expected benefit and confidence levels.
     
-    if patient['risk_level'] in ['CRITICAL', 'HIGH']:
-        actions.append({
-            "action_type": "monitoring",
-            "title": "Repeat Vitals in 15 Minutes",
-            "rationale": f"{patient['risk_level']} risk, close monitoring required",
-            "expected_benefit": "medium",
-            "confidence": 0.90,
-            "urgency": "soon",
-            "order": 5
-        })
-    
-    if ground_truth.get('sepsis_confirmed') and ground_truth.get('sofa_score', 0) >= 6:
-        actions.append({
-            "action_type": "escalation",
-            "title": "Consider ICU Consult",
-            "rationale": f"SOFA score {ground_truth.get('sofa_score')}, severe organ dysfunction",
-            "expected_benefit": "high",
-            "confidence": 0.87,
-            "urgency": "soon",
-            "order": 6
-        })
-    
-    return {
-        "patient_id": patient_id,
-        "actions": sorted(actions, key=lambda x: x['order'])[:5],  # Top 5 actions
-        "generated_at": datetime.utcnow().isoformat() + "Z"
+    Return ONLY valid JSON matching this exact schema:
+    {
+      "actions": [
+        {
+          "action_type": "lab|intervention|monitoring|escalation",
+          "title": "Brief action title (5-8 words)",
+          "rationale": "Clinical reasoning with specific values",
+          "expected_benefit": "high|medium|low",
+          "confidence": 0.0-1.0,
+          "urgency": "immediate|soon|routine"
+        }
+      ]
     }
+    
+    Guidelines:
+    - Generate 3-5 prioritized actions based on clinical urgency
+    - action_type: lab (diagnostics), intervention (treatment), monitoring (observation), escalation (consult/transfer)
+    - expected_benefit: high (likely to prevent deterioration), medium (supportive), low (precautionary)
+    - confidence: based on evidence strength and clinical certainty
+    - urgency: immediate (<15 min), soon (<1 hour), routine (next rounds)
+    - Include specific values in rationale (e.g., "Lactate 4.2 mmol/L, trending up +1.1")
+    - Prioritize sepsis bundle components for high-risk patients"""
+    
+    user_prompt = f"""Generate next best actions for this patient:
+
+Patient: {patient['name']}, {patient['age']}y {patient['gender']} in {patient['room']}
+Diagnosis: {patient['diagnosis']}
+Current Risk Score: {patient['risk_score']}/100 ({patient['risk_level']} RISK)
+SIRS Criteria: {patient['sirs_criteria']}/4
+
+12-Hour Trends:
+- Heart Rate: {trends['hr_change']:+.1f} bpm ({trends['hr_pct_change']:+.1f}%), Current: {vitals['heart_rate']} bpm
+- Temperature: {trends['temp_change']:+.1f}°C ({trends['temp_pct_change']:+.1f}%), Current: {vitals['temperature']}°C
+- WBC: {trends['wbc_change']:+.1f} K/µL ({trends['wbc_pct_change']:+.1f}%), Current: {labs['wbc']} K/µL
+- Lactate: {trends['lactate_change']:+.1f} mmol/L ({trends['lactate_pct_change']:+.1f}%), Current: {labs['lactate']} mmol/L
+
+Current Vitals:
+- HR: {vitals['heart_rate']} bpm, RR: {vitals['respiratory_rate']}, BP: {vitals['blood_pressure']} (MAP {map_pressure:.0f} mmHg), SpO2: {vitals['spo2']}%
+- Temp: {vitals['temperature']}°C
+
+Current Labs:
+- WBC: {labs['wbc']} K/µL, Lactate: {labs['lactate']} mmol/L
+
+Devices: {', '.join([d['type'] + f" (Day {d['days']})" for d in patient['devices']])}
+
+Generate 3-5 prioritized clinical actions with rationale, expected benefit, confidence, and urgency."""
+
+    try:
+        response = client.chat.completions.create(
+            model=os.getenv("AZURE_OPENAI_DEPLOYMENT_GPT41", "gpt-4.1"),
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.3,
+            max_tokens=1000,
+            response_format={"type": "json_object"}
+        )
+        
+        content = response.choices[0].message.content
+        action_data = json.loads(content)
+        
+        return {
+            "patient_id": patient_id,
+            "generated_at": datetime.utcnow().isoformat() + "Z",
+            **action_data
+        }
+    except json.JSONDecodeError as e:
+        return {
+            "patient_id": patient_id,
+            "actions": [{
+                "action_type": "monitoring",
+                "title": "Continue Current Management",
+                "rationale": "Unable to generate specific recommendations. Continue monitoring.",
+                "expected_benefit": "medium",
+                "confidence": 0.5,
+                "urgency": "routine"
+            }],
+            "generated_at": datetime.utcnow().isoformat() + "Z"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/patients/{patient_id}/sepsis-bundle")
 async def get_sepsis_bundle(patient_id: str):
-    """1-Hour Sepsis Bundle Autopilot: Live timers, checkboxes, escalation"""
+    """1-Hour Sepsis Bundle Autopilot: Live timers, checkboxes, escalation using Azure OpenAI"""
     patient = next((p for p in MOCK_PATIENTS if p["id"] == patient_id), None)
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
     
     ground_truth = patient.get('ground_truth', {})
+    history_data = generate_12hour_history(patient)
+    trends = calculate_trend_features(patient, history_data["history"])
     
     bundle_active = patient['risk_level'] in ['CRITICAL', 'HIGH'] or ground_truth.get('sepsis_confirmed')
     
@@ -635,7 +697,8 @@ async def get_sepsis_bundle(patient_id: str):
         return {
             "patient_id": patient_id,
             "bundle_active": False,
-            "message": "Sepsis bundle not activated for this patient"
+            "message": "Sepsis bundle not activated for this patient",
+            "generated_at": datetime.utcnow().isoformat() + "Z"
         }
     
     onset_time = ground_truth.get('sepsis_onset_time')
@@ -647,145 +710,458 @@ async def get_sepsis_bundle(patient_id: str):
     elapsed_minutes = (datetime.utcnow() - bundle_start).total_seconds() / 60
     remaining_minutes = max(0, 60 - elapsed_minutes)
     
-    tasks = [
+    vitals = patient['vitals']['current']
+    labs = patient['labs']['current']
+    
+    system_prompt = """You are a sepsis bundle orchestration AI.
+    Analyze the patient's current status and generate intelligent task tracking for the 1-hour sepsis bundle.
+    
+    Return ONLY valid JSON matching this exact schema:
+    {
+      "tasks": [
         {
-            "id": "lactate",
-            "title": "Measure Lactate",
-            "completed": elapsed_minutes > 10,
-            "blocked": False,
-            "blocker_reason": None,
-            "order": 1
-        },
-        {
-            "id": "cultures",
-            "title": "Obtain Blood Cultures (2 sets)",
-            "completed": elapsed_minutes > 15,
-            "blocked": False,
-            "blocker_reason": None,
-            "order": 2
-        },
-        {
-            "id": "antibiotics",
-            "title": "Administer Broad-Spectrum Antibiotics",
-            "completed": elapsed_minutes > 45,
-            "blocked": elapsed_minutes < 15,
-            "blocker_reason": "Waiting for blood cultures" if elapsed_minutes < 15 else None,
-            "order": 3
-        },
-        {
-            "id": "fluids",
-            "title": "30 mL/kg Crystalloid Bolus",
-            "completed": elapsed_minutes > 35,
-            "blocked": False,
-            "blocker_reason": None,
-            "order": 4
-        },
-        {
-            "id": "reassess",
-            "title": "Reassess Hemodynamics",
-            "completed": elapsed_minutes > 55,
-            "blocked": elapsed_minutes < 35,
-            "blocker_reason": "Waiting for fluid bolus completion" if elapsed_minutes < 35 else None,
-            "order": 5
+          "id": "lactate|cultures|antibiotics|fluids|reassess",
+          "title": "Task title",
+          "completed": true|false,
+          "blocked": true|false,
+          "blocker_reason": "Reason if blocked" or null,
+          "priority": "critical|high|medium"
         }
-    ]
-    
-    completed_count = sum(1 for t in tasks if t['completed'])
-    blocked_count = sum(1 for t in tasks if t['blocked'] and not t['completed'])
-    
-    escalation_needed = remaining_minutes < 15 and completed_count < len(tasks)
-    
-    return {
-        "patient_id": patient_id,
-        "bundle_active": True,
-        "bundle_start": bundle_start.isoformat() + "Z",
-        "elapsed_minutes": round(elapsed_minutes, 1),
-        "remaining_minutes": round(remaining_minutes, 1),
-        "tasks": tasks,
-        "completed_count": completed_count,
-        "total_count": len(tasks),
-        "blocked_count": blocked_count,
-        "escalation_needed": escalation_needed,
-        "escalation_message": "Bundle completion at risk - consider charge nurse notification" if escalation_needed else None,
-        "generated_at": datetime.utcnow().isoformat() + "Z"
+      ],
+      "escalation_needed": true|false,
+      "escalation_message": "Message if escalation needed" or null,
+      "ai_recommendations": "Brief guidance on bundle completion"
     }
+    
+    Guidelines:
+    - Assess completion status based on elapsed time and clinical context
+    - Identify blockers (e.g., waiting for cultures before antibiotics)
+    - Set priority based on clinical urgency and time remaining
+    - Recommend escalation if bundle at risk of not completing in 60 minutes
+    - Consider patient-specific factors (allergies, contraindications)"""
+    
+    user_prompt = f"""Orchestrate sepsis bundle for this patient:
+
+Patient: {patient['name']}, {patient['age']}y {patient['gender']} in {patient['room']}
+Diagnosis: {patient['diagnosis']}
+Risk Level: {patient['risk_level']}
+SIRS Criteria: {patient['sirs_criteria']}/4
+
+Bundle Status:
+- Started: {elapsed_minutes:.1f} minutes ago
+- Remaining: {remaining_minutes:.1f} minutes
+
+Current Vitals:
+- HR: {vitals['heart_rate']} bpm, RR: {vitals['respiratory_rate']}, BP: {vitals['blood_pressure']}, SpO2: {vitals['spo2']}%
+- Temp: {vitals['temperature']}°C
+
+Current Labs:
+- WBC: {labs['wbc']} K/µL, Lactate: {labs['lactate']} mmol/L
+
+12-Hour Trends:
+- Lactate: {trends['lactate_change']:+.1f} mmol/L ({trends['lactate_pct_change']:+.1f}%)
+- HR: {trends['hr_change']:+.1f} bpm ({trends['hr_pct_change']:+.1f}%)
+
+Devices: {', '.join([d['type'] + f" (Day {d['days']})" for d in patient['devices']])}
+
+Generate intelligent task tracking for the 5 sepsis bundle components:
+1. Measure Lactate
+2. Obtain Blood Cultures (2 sets)
+3. Administer Broad-Spectrum Antibiotics
+4. 30 mL/kg Crystalloid Bolus
+5. Reassess Hemodynamics
+
+Consider elapsed time, clinical status, and potential blockers."""
+
+    try:
+        response = client.chat.completions.create(
+            model=os.getenv("AZURE_OPENAI_DEPLOYMENT_GPT41", "gpt-4.1"),
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.3,
+            max_tokens=1000,
+            response_format={"type": "json_object"}
+        )
+        
+        content = response.choices[0].message.content
+        bundle_data = json.loads(content)
+        
+        tasks = bundle_data.get('tasks', [])
+        completed_count = sum(1 for t in tasks if t.get('completed'))
+        blocked_count = sum(1 for t in tasks if t.get('blocked') and not t.get('completed'))
+        
+        return {
+            "patient_id": patient_id,
+            "bundle_active": True,
+            "bundle_start": bundle_start.isoformat() + "Z",
+            "elapsed_minutes": round(elapsed_minutes, 1),
+            "remaining_minutes": round(remaining_minutes, 1),
+            "tasks": tasks,
+            "completed_count": completed_count,
+            "total_count": len(tasks),
+            "blocked_count": blocked_count,
+            "escalation_needed": bundle_data.get('escalation_needed', False),
+            "escalation_message": bundle_data.get('escalation_message'),
+            "ai_recommendations": bundle_data.get('ai_recommendations'),
+            "generated_at": datetime.utcnow().isoformat() + "Z"
+        }
+    except json.JSONDecodeError as e:
+        default_tasks = [
+            {"id": "lactate", "title": "Measure Lactate", "completed": elapsed_minutes > 10, "blocked": False, "blocker_reason": None, "priority": "critical"},
+            {"id": "cultures", "title": "Obtain Blood Cultures (2 sets)", "completed": elapsed_minutes > 15, "blocked": False, "blocker_reason": None, "priority": "critical"},
+            {"id": "antibiotics", "title": "Administer Broad-Spectrum Antibiotics", "completed": elapsed_minutes > 45, "blocked": elapsed_minutes < 15, "blocker_reason": "Waiting for blood cultures" if elapsed_minutes < 15 else None, "priority": "critical"},
+            {"id": "fluids", "title": "30 mL/kg Crystalloid Bolus", "completed": elapsed_minutes > 35, "blocked": False, "blocker_reason": None, "priority": "high"},
+            {"id": "reassess", "title": "Reassess Hemodynamics", "completed": elapsed_minutes > 55, "blocked": elapsed_minutes < 35, "blocker_reason": "Waiting for fluid bolus" if elapsed_minutes < 35 else None, "priority": "medium"}
+        ]
+        completed_count = sum(1 for t in default_tasks if t['completed'])
+        escalation_needed = remaining_minutes < 15 and completed_count < len(default_tasks)
+        
+        return {
+            "patient_id": patient_id,
+            "bundle_active": True,
+            "bundle_start": bundle_start.isoformat() + "Z",
+            "elapsed_minutes": round(elapsed_minutes, 1),
+            "remaining_minutes": round(remaining_minutes, 1),
+            "tasks": default_tasks,
+            "completed_count": completed_count,
+            "total_count": len(default_tasks),
+            "blocked_count": sum(1 for t in default_tasks if t['blocked'] and not t['completed']),
+            "escalation_needed": escalation_needed,
+            "escalation_message": "Bundle completion at risk" if escalation_needed else None,
+            "ai_recommendations": "Unable to generate AI recommendations. Using default task tracking.",
+            "generated_at": datetime.utcnow().isoformat() + "Z"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/patients/{patient_id}/what-if")
 async def what_if_simulator(patient_id: str, intervention: Dict[str, Any]):
-    """What-If Simulator: Predict impact of interventions on risk trajectory"""
+    """What-If Simulator: Predict impact of interventions on risk trajectory using Azure OpenAI"""
     patient = next((p for p in MOCK_PATIENTS if p["id"] == patient_id), None)
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
     
+    history_data = generate_12hour_history(patient)
+    trends = calculate_trend_features(patient, history_data["history"])
+    ground_truth = patient.get('ground_truth', {})
+    
     current_risk = patient['risk_score']
     vitals = patient['vitals']['current']
     labs = patient['labs']['current']
-    
-    predicted_risk = current_risk
-    predicted_vitals = vitals.copy()
-    predicted_labs = labs.copy()
-    effects = []
-    
-    if intervention.get('fluids_ml'):
-        fluid_amount = intervention['fluids_ml']
-        bp_parts = vitals['blood_pressure'].split('/')
-        sbp = int(bp_parts[0])
-        dbp = int(bp_parts[1])
-        
-        sbp_increase = min(20, fluid_amount / 150)
-        dbp_increase = min(10, fluid_amount / 300)
-        
-        predicted_vitals['blood_pressure'] = f"{sbp + int(sbp_increase)}/{dbp + int(dbp_increase)}"
-        predicted_risk -= sbp_increase * 0.5
-        effects.append(f"BP increase: {sbp}→{sbp + int(sbp_increase)} mmHg")
-    
-    if intervention.get('oxygen_increase'):
-        spo2_increase = min(5, intervention['oxygen_increase'] * 2)
-        predicted_vitals['spo2'] = min(100, vitals['spo2'] + spo2_increase)
-        predicted_risk -= spo2_increase * 0.3
-        effects.append(f"SpO2 increase: {vitals['spo2']}→{predicted_vitals['spo2']}%")
-    
-    if intervention.get('antibiotics'):
-        predicted_risk -= 10
-        effects.append("Antibiotics: Expected risk reduction 10 points over 6h")
-    
-    if intervention.get('fluids_ml') or intervention.get('antibiotics'):
-        lactate_reduction = 0.3 if intervention.get('fluids_ml') else 0
-        lactate_reduction += 0.5 if intervention.get('antibiotics') else 0
-        predicted_labs['lactate'] = max(0.5, labs['lactate'] - lactate_reduction)
-        effects.append(f"Lactate reduction: {labs['lactate']}→{predicted_labs['lactate']:.1f} mmol/L")
-    
-    predicted_risk = max(0, min(100, predicted_risk))
-    
-    ground_truth = patient.get('ground_truth', {})
     current_sofa = ground_truth.get('sofa_score', 0)
-    predicted_sofa = current_sofa
     
-    if intervention.get('fluids_ml'):
-        predicted_sofa = max(0, predicted_sofa - 1)
-    if intervention.get('oxygen_increase'):
-        predicted_sofa = max(0, predicted_sofa - 1)
+    bp_parts = vitals['blood_pressure'].split('/')
+    map_pressure = (int(bp_parts[0]) + 2 * int(bp_parts[1])) / 3
     
-    return {
-        "patient_id": patient_id,
-        "intervention": intervention,
-        "current_state": {
-            "risk_score": current_risk,
-            "vitals": vitals,
-            "labs": labs,
-            "sofa_score": current_sofa
-        },
-        "predicted_state": {
-            "risk_score": round(predicted_risk, 1),
-            "vitals": predicted_vitals,
-            "labs": predicted_labs,
-            "sofa_score": predicted_sofa
-        },
-        "effects": effects,
-        "risk_reduction": round(current_risk - predicted_risk, 1),
-        "confidence": 0.75,
-        "generated_at": datetime.utcnow().isoformat() + "Z"
+    system_prompt = """You are a predictive simulation AI for clinical interventions.
+    Predict the physiological and clinical impact of proposed interventions on a septic patient.
+    
+    Return ONLY valid JSON matching this exact schema:
+    {
+      "predicted_state": {
+        "risk_score": 0-100,
+        "heart_rate": number,
+        "blood_pressure": "systolic/diastolic",
+        "spo2": 0-100,
+        "lactate": number,
+        "sofa_score": 0-24
+      },
+      "effects": [
+        "Description of effect 1",
+        "Description of effect 2"
+      ],
+      "risk_reduction": number,
+      "confidence": 0.0-1.0,
+      "clinical_reasoning": "Brief explanation of predictions",
+      "timeframe": "Expected timeframe for effects (e.g., '1-2 hours', '4-6 hours')"
     }
+    
+    Guidelines:
+    - Predict realistic physiological responses based on intervention type and dose
+    - Consider patient's current state, trends, and baseline physiology
+    - Account for synergistic effects of multiple interventions
+    - Provide confidence based on evidence strength and patient variability
+    - Include timeframe for when effects are expected to manifest
+    - Be conservative but evidence-based in predictions"""
+    
+    intervention_desc = []
+    if intervention.get('fluids_ml'):
+        intervention_desc.append(f"IV crystalloid bolus: {intervention['fluids_ml']} mL")
+    if intervention.get('oxygen_increase'):
+        intervention_desc.append(f"Increase O2 by {intervention['oxygen_increase']} L/min")
+    if intervention.get('antibiotics_given'):
+        intervention_desc.append("Administer broad-spectrum antibiotics")
+    if intervention.get('vasopressors_started'):
+        intervention_desc.append("Initiate vasopressor support")
+    
+    user_prompt = f"""Predict intervention effects for this patient:
+
+Patient: {patient['name']}, {patient['age']}y {patient['gender']}
+Diagnosis: {patient['diagnosis']}
+Current Risk Score: {current_risk}/100 ({patient['risk_level']} RISK)
+SIRS Criteria: {patient['sirs_criteria']}/4
+Current SOFA Score: {current_sofa}
+
+Current State:
+- HR: {vitals['heart_rate']} bpm, RR: {vitals['respiratory_rate']}, BP: {vitals['blood_pressure']} (MAP {map_pressure:.0f} mmHg)
+- SpO2: {vitals['spo2']}%, Temp: {vitals['temperature']}°C
+- WBC: {labs['wbc']} K/µL, Lactate: {labs['lactate']} mmol/L
+
+12-Hour Trends:
+- HR: {trends['hr_change']:+.1f} bpm ({trends['hr_pct_change']:+.1f}%)
+- Lactate: {trends['lactate_change']:+.1f} mmol/L ({trends['lactate_pct_change']:+.1f}%)
+
+Proposed Interventions:
+{chr(10).join('- ' + desc for desc in intervention_desc) if intervention_desc else '- No interventions specified'}
+
+Predict the physiological effects, risk reduction, SOFA score change, and confidence level."""
+
+    try:
+        response = client.chat.completions.create(
+            model=os.getenv("AZURE_OPENAI_DEPLOYMENT_GPT41", "gpt-4.1"),
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.3,
+            max_tokens=1000,
+            response_format={"type": "json_object"}
+        )
+        
+        content = response.choices[0].message.content
+        prediction_data = json.loads(content)
+        
+        predicted_state = prediction_data.get('predicted_state', {})
+        
+        return {
+            "patient_id": patient_id,
+            "intervention": intervention,
+            "current_state": {
+                "risk_score": current_risk,
+                "heart_rate": vitals['heart_rate'],
+                "blood_pressure": vitals['blood_pressure'],
+                "spo2": vitals['spo2'],
+                "lactate": labs['lactate'],
+                "sofa_score": current_sofa
+            },
+            "predicted_state": predicted_state,
+            "effects": prediction_data.get('effects', []),
+            "risk_reduction": prediction_data.get('risk_reduction', 0),
+            "confidence": prediction_data.get('confidence', 0.5),
+            "clinical_reasoning": prediction_data.get('clinical_reasoning', ''),
+            "timeframe": prediction_data.get('timeframe', ''),
+            "generated_at": datetime.utcnow().isoformat() + "Z"
+        }
+    except json.JSONDecodeError as e:
+        predicted_risk = current_risk
+        predicted_vitals = vitals.copy()
+        predicted_labs = labs.copy()
+        effects = []
+        
+        if intervention.get('fluids_ml'):
+            fluid_amount = intervention['fluids_ml']
+            sbp = int(bp_parts[0])
+            sbp_increase = min(20, fluid_amount / 150)
+            predicted_vitals['blood_pressure'] = f"{sbp + int(sbp_increase)}/{bp_parts[1]}"
+            predicted_risk -= sbp_increase * 0.5
+            effects.append(f"BP increase: {sbp}→{sbp + int(sbp_increase)} mmHg")
+        
+        if intervention.get('oxygen_increase'):
+            spo2_increase = min(5, intervention['oxygen_increase'] * 2)
+            predicted_vitals['spo2'] = min(100, vitals['spo2'] + spo2_increase)
+            predicted_risk -= spo2_increase * 0.3
+            effects.append(f"SpO2 increase: {vitals['spo2']}→{predicted_vitals['spo2']}%")
+        
+        if intervention.get('antibiotics_given'):
+            predicted_risk -= 10
+            predicted_labs['lactate'] = max(0.5, labs['lactate'] - 0.5)
+            effects.append("Antibiotics: Expected risk reduction over 6h")
+        
+        predicted_risk = max(0, min(100, predicted_risk))
+        
+        return {
+            "patient_id": patient_id,
+            "intervention": intervention,
+            "current_state": {
+                "risk_score": current_risk,
+                "heart_rate": vitals['heart_rate'],
+                "blood_pressure": vitals['blood_pressure'],
+                "spo2": vitals['spo2'],
+                "lactate": labs['lactate'],
+                "sofa_score": current_sofa
+            },
+            "predicted_state": {
+                "risk_score": round(predicted_risk, 1),
+                "heart_rate": vitals['heart_rate'],
+                "blood_pressure": predicted_vitals.get('blood_pressure', vitals['blood_pressure']),
+                "spo2": predicted_vitals.get('spo2', vitals['spo2']),
+                "lactate": predicted_labs.get('lactate', labs['lactate']),
+                "sofa_score": max(0, current_sofa - 1) if intervention.get('fluids_ml') or intervention.get('oxygen_increase') else current_sofa
+            },
+            "effects": effects,
+            "risk_reduction": round(current_risk - predicted_risk, 1),
+            "confidence": 0.5,
+            "clinical_reasoning": "Unable to generate AI prediction. Using simplified model.",
+            "timeframe": "1-6 hours",
+            "generated_at": datetime.utcnow().isoformat() + "Z"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/patients/{patient_id}/early-warning")
+async def get_early_warning(patient_id: str):
+    """Multi-Agent Early Warning System: 6 specialized agents analyzing patient deterioration"""
+    patient = next((p for p in MOCK_PATIENTS if p["id"] == patient_id), None)
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    
+    history_data = generate_12hour_history(patient)
+    trends = calculate_trend_features(patient, history_data["history"])
+    ground_truth = patient.get('ground_truth', {})
+    
+    vitals = patient['vitals']['current']
+    labs = patient['labs']['current']
+    bp_parts = vitals['blood_pressure'].split('/')
+    map_pressure = (int(bp_parts[0]) + 2 * int(bp_parts[1])) / 3
+    
+    system_prompt = """You are a multi-agent early warning system for sepsis detection.
+    Analyze the patient from 6 specialized perspectives and generate a consensus early warning assessment.
+    
+    Return ONLY valid JSON matching this exact schema:
+    {
+      "overall_ews_score": 0-100,
+      "severity": "critical|warning|info|stable",
+      "trend": "rising|stable|falling",
+      "time_to_breach": "X.Xh" or null,
+      "agent_evidence": [
+        {
+          "agent": "Hemodynamics Agent|Infection Agent|Metabolic Agent|Respiratory Agent|Data Quality Agent|Orchestrator",
+          "score": 0-100,
+          "severity": "critical|warning|info|stable",
+          "confidence": 0.0-1.0,
+          "reasons": ["Reason 1", "Reason 2"],
+          "icon": "activity|alert-triangle|beaker|thermometer|trending-up|stethoscope"
+        }
+      ],
+      "conflicts": [
+        {
+          "between": ["Agent A", "Agent B"],
+          "reason": "Description of disagreement"
+        }
+      ],
+      "recommended_actions": [
+        {
+          "action": "Action description",
+          "urgency": "immediate|soon|routine",
+          "rationale": "Why this action is needed"
+        }
+      ],
+      "clinical_reasoning": "Brief consensus explanation"
+    }
+    
+    Guidelines for each agent:
+    - Hemodynamics Agent: Analyze HR velocity, MAP, BP trends, perfusion markers
+    - Infection Agent: Evaluate temp, WBC, SIRS criteria, suspected infection sources
+    - Metabolic Agent: Assess lactate levels, clearance, acid-base status
+    - Respiratory Agent: Review RR, SpO2, oxygenation (if available)
+    - Data Quality Agent: Flag missing/stale labs, identify data gaps affecting confidence
+    - Orchestrator: Synthesize all agent inputs, resolve conflicts, generate consensus
+    
+    Conflict detection:
+    - Flag when agents disagree on severity (e.g., one says critical, another says stable)
+    - Explain the source of disagreement
+    
+    Overall EWS score:
+    - Weighted ensemble of all agent scores
+    - Time-weighted: recent changes matter more
+    - Confidence-weighted: higher confidence agents weighted more"""
+    
+    user_prompt = f"""Generate multi-agent early warning assessment for this patient:
+
+Patient: {patient['name']}, {patient['age']}y {patient['gender']} in {patient['room']}
+Diagnosis: {patient['diagnosis']}
+Current Risk Score: {patient['risk_score']}/100 ({patient['risk_level']} RISK)
+SIRS Criteria: {patient['sirs_criteria']}/4
+qSOFA Score: {ground_truth.get('qsofa_score', 0)}
+SOFA Score: {ground_truth.get('sofa_score', 0)}
+
+Current Vitals:
+- HR: {vitals['heart_rate']} bpm, RR: {vitals['respiratory_rate']}, BP: {vitals['blood_pressure']} (MAP {map_pressure:.0f} mmHg)
+- SpO2: {vitals['spo2']}%, Temp: {vitals['temperature']}°C
+
+Current Labs:
+- WBC: {labs['wbc']} K/µL, Lactate: {labs['lactate']} mmol/L
+
+12-Hour Trends:
+- HR: {trends['hr_change']:+.1f} bpm ({trends['hr_pct_change']:+.1f}%), Peak: {trends['max_hr']} bpm
+- Temp: {trends['temp_change']:+.1f}°C ({trends['temp_pct_change']:+.1f}%), Peak: {trends['max_temp']}°C
+- WBC: {trends['wbc_change']:+.1f} K/µL ({trends['wbc_pct_change']:+.1f}%), Peak: {trends['max_wbc']} K/µL
+- Lactate: {trends['lactate_change']:+.1f} mmol/L ({trends['lactate_pct_change']:+.1f}%), Peak: {trends['max_lactate']} mmol/L
+
+Devices: {', '.join([d['type'] + f" (Day {d['days']})" for d in patient['devices']])}
+
+Generate analysis from all 6 agents:
+1. Hemodynamics Agent - cardiovascular stability
+2. Infection Agent - infection markers and SIRS
+3. Metabolic Agent - lactate and metabolic status
+4. Respiratory Agent - oxygenation and ventilation
+5. Data Quality Agent - data completeness and reliability
+6. Orchestrator - consensus and conflict resolution
+
+Provide overall EWS score, trend, agent evidence, conflicts, and recommended actions."""
+
+    try:
+        response = client.chat.completions.create(
+            model=os.getenv("AZURE_OPENAI_DEPLOYMENT_GPT41", "gpt-4.1"),
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.3,
+            max_tokens=2000,
+            response_format={"type": "json_object"}
+        )
+        
+        content = response.choices[0].message.content
+        ews_data = json.loads(content)
+        
+        return {
+            "patient_id": patient_id,
+            "generated_at": datetime.utcnow().isoformat() + "Z",
+            **ews_data
+        }
+    except json.JSONDecodeError as e:
+        return {
+            "patient_id": patient_id,
+            "overall_ews_score": patient['risk_score'],
+            "severity": patient['risk_level'].lower(),
+            "trend": "stable",
+            "time_to_breach": None,
+            "agent_evidence": [
+                {
+                    "agent": "Orchestrator",
+                    "score": patient['risk_score'],
+                    "severity": patient['risk_level'].lower(),
+                    "confidence": 0.5,
+                    "reasons": ["Unable to generate multi-agent analysis. Using baseline risk."],
+                    "icon": "stethoscope"
+                }
+            ],
+            "conflicts": [],
+            "recommended_actions": [
+                {
+                    "action": "Continue monitoring",
+                    "urgency": "routine",
+                    "rationale": "Unable to generate specific recommendations"
+                }
+            ],
+            "clinical_reasoning": "Unable to generate multi-agent analysis. Using simplified assessment.",
+            "generated_at": datetime.utcnow().isoformat() + "Z"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.websocket("/api/realtime")
 async def realtime_websocket(websocket: WebSocket):
