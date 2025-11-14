@@ -1,0 +1,8 @@
+sepsis-backend/.env
+sepsis-frontend/.env
+sepsis-frontend/dist/
+sepsis-backend/__pycache__/
+sepsis-backend/app/__pycache__/
+*.pyc
+node_modules/
+.DS_Store
