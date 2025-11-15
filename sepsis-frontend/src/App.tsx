@@ -99,7 +99,16 @@ function App() {
   const [horizonForecast, setHorizonForecast] = useState<any>(null)
   const [nextBestAction, setNextBestAction] = useState<any>(null)
   const [sepsisBundle, setSepsisBundle] = useState<any>(null)
+  const [earlyWarning, setEarlyWarning] = useState<any>(null)
+  const [whatIfIntervention, setWhatIfIntervention] = useState<any>({
+    fluids_ml: 0,
+    oxygen_increase: 0,
+    antibiotics_given: false,
+    vasopressors_started: false
+  })
+  const [whatIfPrediction, setWhatIfPrediction] = useState<any>(null)
   const [loadingGameChangers, setLoadingGameChangers] = useState(false)
+  const [loadingWhatIf, setLoadingWhatIf] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
@@ -445,6 +454,8 @@ function App() {
     setHorizonForecast(null)
     setNextBestAction(null)
     setSepsisBundle(null)
+    setEarlyWarning(null)
+    setWhatIfPrediction(null)
     setLoadingHistory(true)
     setLoadingAnalysis(true)
     setLoadingGameChangers(true)
@@ -474,21 +485,24 @@ function App() {
     }
 
     try {
-      const [forecastRes, actionRes, bundleRes] = await Promise.all([
+      const [forecastRes, actionRes, bundleRes, earlyWarningRes] = await Promise.all([
         fetch(`${API_URL}/api/patients/${patient.id}/horizon-forecast`, { headers: getAuthHeaders() }),
         fetch(`${API_URL}/api/patients/${patient.id}/next-best-action`, { headers: getAuthHeaders() }),
-        fetch(`${API_URL}/api/patients/${patient.id}/sepsis-bundle`, { headers: getAuthHeaders() })
+        fetch(`${API_URL}/api/patients/${patient.id}/sepsis-bundle`, { headers: getAuthHeaders() }),
+        fetch(`${API_URL}/api/patients/${patient.id}/early-warning`, { headers: getAuthHeaders() })
       ])
       
-      const [forecastData, actionData, bundleData] = await Promise.all([
+      const [forecastData, actionData, bundleData, earlyWarningData] = await Promise.all([
         forecastRes.json(),
         actionRes.json(),
-        bundleRes.json()
+        bundleRes.json(),
+        earlyWarningRes.json()
       ])
       
       setHorizonForecast(forecastData)
       setNextBestAction(actionData)
       setSepsisBundle(bundleData)
+      setEarlyWarning(earlyWarningData)
       setLoadingGameChangers(false)
     } catch (error) {
       console.error('Error fetching game-changing features:', error)
@@ -1385,6 +1399,259 @@ function App() {
                           {sepsisBundle.escalation_needed && (
                             <div className="mt-3 p-2 bg-red-900/30 border border-red-600/40 rounded text-xs text-red-300">
                               ⚠ {sepsisBundle.escalation_message}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    <div className="border-t border-gray-700 pt-4">
+                      <div className="flex items-center space-x-2 mb-3">
+                        <Beaker className="w-5 h-5 text-cyan-400" />
+                        <h3 className="text-sm font-semibold text-white">What-If Simulator</h3>
+                      </div>
+                      <div className="bg-slate-900/70 border border-slate-600 rounded-lg p-4">
+                        <div className="space-y-4">
+                          <div>
+                            <label className="text-xs text-gray-400 mb-2 block">IV Fluids (mL)</label>
+                            <input
+                              type="range"
+                              min="0"
+                              max="4000"
+                              step="500"
+                              value={whatIfIntervention.fluids_ml}
+                              onChange={async (e) => {
+                                const newIntervention = { ...whatIfIntervention, fluids_ml: parseInt(e.target.value) }
+                                setWhatIfIntervention(newIntervention)
+                                setLoadingWhatIf(true)
+                                try {
+                                  const response = await fetch(`${API_URL}/api/patients/${quickViewPatient.id}/what-if`, {
+                                    method: 'POST',
+                                    headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(newIntervention)
+                                  })
+                                  const data = await response.json()
+                                  setWhatIfPrediction(data)
+                                } catch (error) {
+                                  console.error('Error fetching what-if prediction:', error)
+                                } finally {
+                                  setLoadingWhatIf(false)
+                                }
+                              }}
+                              className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                            />
+                            <div className="text-xs text-white mt-1">{whatIfIntervention.fluids_ml} mL</div>
+                          </div>
+                          
+                          <div>
+                            <label className="text-xs text-gray-400 mb-2 block">Oxygen Increase (L/min)</label>
+                            <input
+                              type="range"
+                              min="0"
+                              max="10"
+                              step="1"
+                              value={whatIfIntervention.oxygen_increase}
+                              onChange={async (e) => {
+                                const newIntervention = { ...whatIfIntervention, oxygen_increase: parseInt(e.target.value) }
+                                setWhatIfIntervention(newIntervention)
+                                setLoadingWhatIf(true)
+                                try {
+                                  const response = await fetch(`${API_URL}/api/patients/${quickViewPatient.id}/what-if`, {
+                                    method: 'POST',
+                                    headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(newIntervention)
+                                  })
+                                  const data = await response.json()
+                                  setWhatIfPrediction(data)
+                                } catch (error) {
+                                  console.error('Error fetching what-if prediction:', error)
+                                } finally {
+                                  setLoadingWhatIf(false)
+                                }
+                              }}
+                              className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                            />
+                            <div className="text-xs text-white mt-1">{whatIfIntervention.oxygen_increase} L/min</div>
+                          </div>
+                          
+                          <div className="flex space-x-4">
+                            <label className="flex items-center space-x-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={whatIfIntervention.antibiotics_given}
+                                onChange={async (e) => {
+                                  const newIntervention = { ...whatIfIntervention, antibiotics_given: e.target.checked }
+                                  setWhatIfIntervention(newIntervention)
+                                  setLoadingWhatIf(true)
+                                  try {
+                                    const response = await fetch(`${API_URL}/api/patients/${quickViewPatient.id}/what-if`, {
+                                      method: 'POST',
+                                      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                                      body: JSON.stringify(newIntervention)
+                                    })
+                                    const data = await response.json()
+                                    setWhatIfPrediction(data)
+                                  } catch (error) {
+                                    console.error('Error fetching what-if prediction:', error)
+                                  } finally {
+                                    setLoadingWhatIf(false)
+                                  }
+                                }}
+                                className="w-4 h-4 rounded border-gray-600 bg-gray-700"
+                              />
+                              <span className="text-xs text-white">Antibiotics</span>
+                            </label>
+                            
+                            <label className="flex items-center space-x-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={whatIfIntervention.vasopressors_started}
+                                onChange={async (e) => {
+                                  const newIntervention = { ...whatIfIntervention, vasopressors_started: e.target.checked }
+                                  setWhatIfIntervention(newIntervention)
+                                  setLoadingWhatIf(true)
+                                  try {
+                                    const response = await fetch(`${API_URL}/api/patients/${quickViewPatient.id}/what-if`, {
+                                      method: 'POST',
+                                      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                                      body: JSON.stringify(newIntervention)
+                                    })
+                                    const data = await response.json()
+                                    setWhatIfPrediction(data)
+                                  } catch (error) {
+                                    console.error('Error fetching what-if prediction:', error)
+                                  } finally {
+                                    setLoadingWhatIf(false)
+                                  }
+                                }}
+                                className="w-4 h-4 rounded border-gray-600 bg-gray-700"
+                              />
+                              <span className="text-xs text-white">Vasopressors</span>
+                            </label>
+                          </div>
+                        </div>
+                        
+                        {loadingWhatIf ? (
+                          <div className="mt-4">
+                            <Skeleton className="h-24 w-full bg-gray-700 rounded-lg" />
+                          </div>
+                        ) : whatIfPrediction && (
+                          <div className="mt-4 space-y-3">
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="p-3 bg-gray-800/50 rounded border border-gray-700">
+                                <div className="text-xs text-gray-400 mb-1">Current Risk</div>
+                                <div className="text-2xl font-bold text-white">
+                                  {whatIfPrediction.current_state?.risk_score || quickViewPatient.risk_score}
+                                </div>
+                              </div>
+                              <div className="p-3 bg-gray-800/50 rounded border border-gray-700">
+                                <div className="text-xs text-gray-400 mb-1">Predicted Risk</div>
+                                <div className={`text-2xl font-bold ${
+                                  whatIfPrediction.predicted_state?.risk_score < (whatIfPrediction.current_state?.risk_score || quickViewPatient.risk_score)
+                                    ? 'text-green-400' : 'text-amber-400'
+                                }`}>
+                                  {whatIfPrediction.predicted_state?.risk_score || 0}
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {whatIfPrediction.risk_reduction > 0 && (
+                              <div className="p-2 bg-green-950/30 border border-green-600/40 rounded text-xs text-green-300">
+                                ✓ Expected risk reduction: {whatIfPrediction.risk_reduction} points
+                              </div>
+                            )}
+                            
+                            {whatIfPrediction.effects && whatIfPrediction.effects.length > 0 && (
+                              <div className="space-y-1">
+                                {whatIfPrediction.effects.map((effect: string, idx: number) => (
+                                  <div key={idx} className="text-xs text-gray-300">• {effect}</div>
+                                ))}
+                              </div>
+                            )}
+                            
+                            {whatIfPrediction.clinical_reasoning && (
+                              <div className="text-xs text-gray-400 italic mt-2">
+                                {whatIfPrediction.clinical_reasoning}
+                              </div>
+                            )}
+                            
+                            {whatIfPrediction.timeframe && (
+                              <div className="text-xs text-gray-400">
+                                Expected timeframe: {whatIfPrediction.timeframe}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {earlyWarning && (
+                      <div className="border-t border-gray-700 pt-4">
+                        <div className="flex items-center space-x-2 mb-3">
+                          <Stethoscope className="w-5 h-5 text-purple-400" />
+                          <h3 className="text-sm font-semibold text-white">Multi-Agent Early Warning System</h3>
+                        </div>
+                        <div className="bg-slate-900/70 border border-slate-600 rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-4">
+                            <div>
+                              <div className="text-xs text-gray-400 mb-1">Overall EWS Score</div>
+                              <div className={`text-3xl font-bold ${
+                                earlyWarning.overall_ews_score >= 70 ? 'text-red-400' : 
+                                earlyWarning.overall_ews_score >= 50 ? 'text-amber-400' : 'text-green-400'
+                              }`}>
+                                {earlyWarning.overall_ews_score}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-xs text-gray-400 mb-1">Trend</div>
+                              <div className={`text-sm font-semibold ${
+                                earlyWarning.trend === 'rising' ? 'text-red-400' : 
+                                earlyWarning.trend === 'falling' ? 'text-green-400' : 'text-gray-400'
+                              }`}>
+                                {earlyWarning.trend}
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {earlyWarning.agent_evidence && earlyWarning.agent_evidence.length > 0 && (
+                            <div className="space-y-2 mb-4">
+                              <div className="text-xs text-gray-400 mb-2">Agent Evidence</div>
+                              <div className="grid grid-cols-2 gap-2">
+                                {earlyWarning.agent_evidence.map((agent: any, idx: number) => (
+                                  <div key={idx} className={`p-2 rounded border ${
+                                    agent.severity === 'critical' ? 'bg-red-950/30 border-red-600/40' :
+                                    agent.severity === 'warning' ? 'bg-amber-950/30 border-amber-600/40' :
+                                    agent.severity === 'info' ? 'bg-sky-950/40 border-sky-600/40' :
+                                    'bg-emerald-950/30 border-emerald-600/40'
+                                  }`}>
+                                    <div className="flex items-center justify-between mb-1">
+                                      <div className="text-xs font-semibold text-white">{agent.agent}</div>
+                                      <div className={`text-sm font-bold ${
+                                        agent.score >= 70 ? 'text-red-400' : 
+                                        agent.score >= 50 ? 'text-amber-400' : 'text-green-400'
+                                      }`}>
+                                        {agent.score}
+                                      </div>
+                                    </div>
+                                    {agent.reasons && agent.reasons.length > 0 && (
+                                      <div className="text-xs text-gray-300 mt-1">
+                                        {agent.reasons[0]}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {earlyWarning.conflicts && earlyWarning.conflicts.length > 0 && (
+                            <div className="mb-4 p-2 bg-amber-950/30 border border-amber-600/40 rounded text-xs text-amber-300">
+                              ⚠ Agent Conflicts: {earlyWarning.conflicts[0].reason}
+                            </div>
+                          )}
+                          
+                          {earlyWarning.clinical_reasoning && (
+                            <div className="text-xs text-gray-300 italic">
+                              {earlyWarning.clinical_reasoning}
                             </div>
                           )}
                         </div>
