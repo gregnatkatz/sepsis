@@ -97,7 +97,7 @@ async def run_evaluation_for_patient(
         if cached:
             return cached
     
-    result = await run_monte_carlo_simulation(patient_data, samples_per_pathway=samples, seed=seed)
+    result = run_monte_carlo(patient_data, samples_per_pathway=samples, seed=seed)
     
     await cache_evaluation_result(patient_id, samples, seed, result, db)
     
