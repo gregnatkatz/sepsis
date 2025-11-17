@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart, Bar, Cell, PieChart, Pie } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart, Bar } from 'recharts'
 import { AGUIClient } from './aguiClient'
 
 const API_URL = (import.meta.env.VITE_API_URL && import.meta.env.VITE_API_URL.trim() !== '') 
@@ -113,7 +113,7 @@ function App() {
   const [loadingRlResults, setLoadingRlResults] = useState(false)
   const [monteCarloPathways, setMonteCarloPathways] = useState<any>(null)
   const [selectedPathway, setSelectedPathway] = useState<number>(0)
-  const [loadingMonteCarl, setLoadingMonteCarlo] = useState(false)
+  const [loadingMonteCarlo, setLoadingMonteCarlo] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
@@ -548,11 +548,13 @@ function App() {
       setMonteCarloPathways(monteCarloData)
       if (monteCarloData.top_3_pathways && monteCarloData.top_3_pathways.length > 0) {
         const topPathway = monteCarloData.top_3_pathways[0]
+        const abxCoverage = (topPathway.treatment_details?.antibiotics?.coverage || '').toLowerCase()
+        const vasopressorType = (topPathway.treatment_details?.vasopressor?.type || '').toLowerCase()
         setWhatIfIntervention({
           fluids_ml: topPathway.treatment_details?.fluids?.volume_ml || 0,
           oxygen_increase: 0,
-          antibiotics_given: topPathway.treatment_details?.antibiotics?.coverage !== 'None',
-          vasopressors_started: topPathway.treatment_details?.vasopressor?.type !== 'None'
+          antibiotics_given: abxCoverage !== 'none' && abxCoverage !== '',
+          vasopressors_started: vasopressorType !== 'none' && vasopressorType !== ''
         })
       }
       setLoadingMonteCarlo(false)
@@ -1843,45 +1845,54 @@ function App() {
                             <div>
                               <div className="text-xs text-gray-400 mb-2">Top 3 Treatment Pathways</div>
                               <div className="grid grid-cols-3 gap-2">
-                                {monteCarloPathways.top_3_pathways.map((pathway: any, idx: number) => (
-                                  <button
-                                    key={idx}
-                                    onClick={() => {
-                                      setSelectedPathway(idx)
-                                      setWhatIfIntervention({
-                                        fluids_ml: pathway.treatment_details?.fluids?.volume_ml || 0,
-                                        oxygen_increase: 0,
-                                        antibiotics_given: pathway.treatment_details?.antibiotics?.coverage !== 'None',
-                                        vasopressors_started: pathway.treatment_details?.vasopressor?.type !== 'None'
-                                      })
-                                    }}
-                                    className={`p-3 rounded-lg border-2 transition-all ${
-                                      selectedPathway === idx
-                                        ? 'border-cyan-500 bg-cyan-900/30'
-                                        : 'border-gray-600 bg-gray-800/50 hover:border-gray-500'
-                                    }`}
-                                  >
-                                    <div className="flex items-center justify-between mb-2">
-                                      <div className="text-xs font-semibold text-white">
-                                        {idx === 0 ? '🏆 Optimal' : `Option ${idx + 1}`}
+                                {(monteCarloPathways.top_3_pathways || []).map((pathway: any, idx: number) => {
+                                  const survivalProb = pathway.expected_outcomes?.survival_prob?.mean ?? 0
+                                  const timeToStability = pathway.expected_outcomes?.time_to_stability_hr?.mean ?? 0
+                                  const abxCoverage = (pathway.treatment_details?.antibiotics?.coverage || '').toLowerCase()
+                                  const vasopressorType = (pathway.treatment_details?.vasopressor?.type || '').toLowerCase()
+                                  const hasAntibiotics = abxCoverage !== 'none' && abxCoverage !== ''
+                                  const hasVasopressors = vasopressorType !== 'none' && vasopressorType !== ''
+                                  
+                                  return (
+                                    <button
+                                      key={idx}
+                                      onClick={() => {
+                                        setSelectedPathway(idx)
+                                        setWhatIfIntervention({
+                                          fluids_ml: pathway.treatment_details?.fluids?.volume_ml || 0,
+                                          oxygen_increase: 0,
+                                          antibiotics_given: hasAntibiotics,
+                                          vasopressors_started: hasVasopressors
+                                        })
+                                      }}
+                                      className={`p-3 rounded-lg border-2 transition-all ${
+                                        selectedPathway === idx
+                                          ? 'border-cyan-500 bg-cyan-900/30'
+                                          : 'border-gray-600 bg-gray-800/50 hover:border-gray-500'
+                                      }`}
+                                    >
+                                      <div className="flex items-center justify-between mb-2">
+                                        <div className="text-xs font-semibold text-white">
+                                          {idx === 0 ? '🏆 Optimal' : `Option ${idx + 1}`}
+                                        </div>
+                                        <div className="text-lg font-bold text-cyan-400">
+                                          {Math.round(survivalProb * 100)}%
+                                        </div>
                                       </div>
-                                      <div className="text-lg font-bold text-cyan-400">
-                                        {(pathway.outcomes.survival_probability * 100).toFixed(0)}%
+                                      <div className="text-xs text-gray-400 mb-1">
+                                        {pathway.treatment_details?.fluids?.volume_ml || 0} mL fluids
                                       </div>
-                                    </div>
-                                    <div className="text-xs text-gray-400 mb-1">
-                                      {pathway.treatment_details?.fluids?.volume_ml || 0} mL fluids
-                                    </div>
-                                    <div className="text-xs text-gray-400">
-                                      {pathway.treatment_details?.antibiotics?.coverage !== 'None' ? '✓ Antibiotics' : '○ No antibiotics'}
-                                      {' • '}
-                                      {pathway.treatment_details?.vasopressor?.type !== 'None' ? '✓ Pressors' : '○ No pressors'}
-                                    </div>
-                                    <div className="text-xs text-gray-500 mt-1">
-                                      Stability: {pathway.outcomes.time_to_stability_hours?.toFixed(1) || 'N/A'}h
-                                    </div>
-                                  </button>
-                                ))}
+                                      <div className="text-xs text-gray-400">
+                                        {hasAntibiotics ? '✓ Antibiotics' : '○ No antibiotics'}
+                                        {' • '}
+                                        {hasVasopressors ? '✓ Pressors' : '○ No pressors'}
+                                      </div>
+                                      <div className="text-xs text-gray-500 mt-1">
+                                        Stability: {timeToStability > 0 ? timeToStability.toFixed(1) : 'N/A'}h
+                                      </div>
+                                    </button>
+                                  )
+                                })}
                               </div>
                             </div>
 
@@ -1970,19 +1981,19 @@ function App() {
                                       <div>
                                         <div className="text-xs text-gray-500">Survival</div>
                                         <div className="text-sm font-bold text-green-400">
-                                          {(whatIfPrediction.survival_probability * 100).toFixed(0)}%
+                                          {Math.round((whatIfPrediction.survival_probability ?? 0) * 100)}%
                                         </div>
                                       </div>
                                       <div>
                                         <div className="text-xs text-gray-500">Stability</div>
                                         <div className="text-sm font-bold text-cyan-400">
-                                          {whatIfPrediction.time_to_stability_hours?.toFixed(1) || 'N/A'}h
+                                          {(whatIfPrediction.time_to_stability_hours ?? 0) > 0 ? (whatIfPrediction.time_to_stability_hours).toFixed(1) : 'N/A'}h
                                         </div>
                                       </div>
                                       <div>
                                         <div className="text-xs text-gray-500">Organ Score</div>
                                         <div className="text-sm font-bold text-blue-400">
-                                          {(whatIfPrediction.organ_preservation_score * 100).toFixed(0)}%
+                                          {Math.round(whatIfPrediction.organ_preservation_score ?? 0)}%
                                         </div>
                                       </div>
                                     </div>
@@ -1999,24 +2010,28 @@ function App() {
                                     <span className="text-gray-400">Survival Probability</span>
                                   </div>
                                   <div className="space-y-1">
-                                    {monteCarloPathways.top_3_pathways.map((pathway: any, idx: number) => (
-                                      <div key={idx} className="flex items-center space-x-2">
-                                        <div className="text-xs text-gray-500 w-16">
-                                          {idx === 0 ? 'Optimal' : `Option ${idx + 1}`}
+                                    {(monteCarloPathways.top_3_pathways || []).map((pathway: any, idx: number) => {
+                                      const survivalProb = pathway.expected_outcomes?.survival_prob?.mean ?? 0
+                                      const survivalPct = Math.max(0, Math.min(100, survivalProb * 100))
+                                      return (
+                                        <div key={idx} className="flex items-center space-x-2">
+                                          <div className="text-xs text-gray-500 w-16">
+                                            {idx === 0 ? 'Optimal' : `Option ${idx + 1}`}
+                                          </div>
+                                          <div className="flex-1 bg-gray-800 rounded-full h-4 overflow-hidden">
+                                            <div
+                                              className={`h-full ${
+                                                idx === 0 ? 'bg-green-500' : idx === 1 ? 'bg-cyan-500' : 'bg-blue-500'
+                                              }`}
+                                              style={{ width: `${survivalPct}%` }}
+                                            />
+                                          </div>
+                                          <div className="text-xs text-white w-12 text-right">
+                                            {Math.round(survivalPct)}%
+                                          </div>
                                         </div>
-                                        <div className="flex-1 bg-gray-800 rounded-full h-4 overflow-hidden">
-                                          <div
-                                            className={`h-full ${
-                                              idx === 0 ? 'bg-green-500' : idx === 1 ? 'bg-cyan-500' : 'bg-blue-500'
-                                            }`}
-                                            style={{ width: `${pathway.outcomes.survival_probability * 100}%` }}
-                                          />
-                                        </div>
-                                        <div className="text-xs text-white w-12 text-right">
-                                          {(pathway.outcomes.survival_probability * 100).toFixed(0)}%
-                                        </div>
-                                      </div>
-                                    ))}
+                                      )
+                                    })}
                                   </div>
                                 </div>
 
@@ -2025,9 +2040,9 @@ function App() {
                                     <span className="text-gray-400">Time to Stability (hours)</span>
                                   </div>
                                   <div className="space-y-1">
-                                    {monteCarloPathways.top_3_pathways.map((pathway: any, idx: number) => {
-                                      const maxTime = Math.max(...monteCarloPathways.top_3_pathways.map((p: any) => p.outcomes.time_to_stability_hours || 0))
-                                      const time = pathway.outcomes.time_to_stability_hours || 0
+                                    {(monteCarloPathways.top_3_pathways || []).map((pathway: any, idx: number) => {
+                                      const maxTime = Math.max(...(monteCarloPathways.top_3_pathways || []).map((p: any) => p.expected_outcomes?.time_to_stability_hr?.mean || 0))
+                                      const time = pathway.expected_outcomes?.time_to_stability_hr?.mean || 0
                                       return (
                                         <div key={idx} className="flex items-center space-x-2">
                                           <div className="text-xs text-gray-500 w-16">
@@ -2055,31 +2070,35 @@ function App() {
                                     <span className="text-gray-400">Organ Preservation Score</span>
                                   </div>
                                   <div className="space-y-1">
-                                    {monteCarloPathways.top_3_pathways.map((pathway: any, idx: number) => (
-                                      <div key={idx} className="flex items-center space-x-2">
-                                        <div className="text-xs text-gray-500 w-16">
-                                          {idx === 0 ? 'Optimal' : `Option ${idx + 1}`}
+                                    {(monteCarloPathways.top_3_pathways || []).map((pathway: any, idx: number) => {
+                                      const organScore = pathway.expected_outcomes?.organ_preservation_score?.mean ?? 0
+                                      const organPct = Math.max(0, Math.min(100, organScore))
+                                      return (
+                                        <div key={idx} className="flex items-center space-x-2">
+                                          <div className="text-xs text-gray-500 w-16">
+                                            {idx === 0 ? 'Optimal' : `Option ${idx + 1}`}
+                                          </div>
+                                          <div className="flex-1 bg-gray-800 rounded-full h-4 overflow-hidden">
+                                            <div
+                                              className={`h-full ${
+                                                idx === 0 ? 'bg-green-500' : idx === 1 ? 'bg-cyan-500' : 'bg-blue-500'
+                                              }`}
+                                              style={{ width: `${organPct}%` }}
+                                            />
+                                          </div>
+                                          <div className="text-xs text-white w-12 text-right">
+                                            {Math.round(organPct)}%
+                                          </div>
                                         </div>
-                                        <div className="flex-1 bg-gray-800 rounded-full h-4 overflow-hidden">
-                                          <div
-                                            className={`h-full ${
-                                              idx === 0 ? 'bg-green-500' : idx === 1 ? 'bg-cyan-500' : 'bg-blue-500'
-                                            }`}
-                                            style={{ width: `${pathway.outcomes.organ_preservation_score * 100}%` }}
-                                          />
-                                        </div>
-                                        <div className="text-xs text-white w-12 text-right">
-                                          {(pathway.outcomes.organ_preservation_score * 100).toFixed(0)}%
-                                        </div>
-                                      </div>
-                                    ))}
+                                      )
+                                    })}
                                   </div>
                                 </div>
                               </div>
                             </div>
 
                             <div className="text-xs text-gray-500 italic">
-                              Based on {monteCarloPathways.metadata?.samples_per_candidate || 100} Monte Carlo simulations per pathway
+                              Based on {monteCarloPathways.simulation_params?.samples_per_pathway || monteCarloPathways.top_3_pathways?.[0]?.samples || 100} Monte Carlo simulations per pathway
                             </div>
                           </div>
                         ) : (
