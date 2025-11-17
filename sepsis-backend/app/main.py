@@ -30,6 +30,7 @@ from app.evaluation_agent import (
     get_evaluation_run_status, get_cached_evaluation
 )
 from app.reports import get_trending_outcomes, get_pathway_adoption
+from app.synthetic_outcomes import generate_synthetic_outcomes, generate_pathway_adoption as generate_synthetic_pathway_adoption
 
 load_dotenv()
 
@@ -1391,21 +1392,33 @@ async def get_cached_eval(
 async def get_outcomes_report(
     window: str = "weekly",
     risk_level: Optional[str] = None,
+    use_synthetic: bool = True,
     db: AsyncSession = Depends(get_db)
 ):
-    """Get trending outcomes data for Report tab"""
-    cohort_filter = {"risk_level": risk_level} if risk_level else None
-    result = await get_trending_outcomes(window, cohort_filter, db)
-    return result
+    """Get trending outcomes data for Report tab (uses synthetic data by default for demo)"""
+    if use_synthetic:
+        weeks = 12 if window == "weekly" else 6
+        result = generate_synthetic_outcomes(weeks=weeks)
+        return result
+    else:
+        cohort_filter = {"risk_level": risk_level} if risk_level else None
+        result = await get_trending_outcomes(window, cohort_filter, db)
+        return result
 
 @app.get("/api/reports/pathway-adoption")
 async def get_pathway_report(
     window: str = "weekly",
+    use_synthetic: bool = True,
     db: AsyncSession = Depends(get_db)
 ):
-    """Get pathway adoption trends over time"""
-    result = await get_pathway_adoption(window, db)
-    return result
+    """Get pathway adoption trends over time (uses synthetic data by default for demo)"""
+    if use_synthetic:
+        weeks = 12 if window == "weekly" else 6
+        result = generate_synthetic_pathway_adoption(weeks=weeks)
+        return result
+    else:
+        result = await get_pathway_adoption(window, db)
+        return result
 
 @app.get("/api/patients/{patient_id}/early-warning")
 async def get_early_warning(patient_id: str):
