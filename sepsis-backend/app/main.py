@@ -18,6 +18,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from mock_patients import MOCK_PATIENTS
 from app.agui import create_agui_session, handle_agui_websocket
+from app.llm_client import get_llm_client, ModelType
 
 load_dotenv()
 
