@@ -25,6 +25,11 @@ from app.database import (
     get_db, init_db, DimPatient, FactVitals, FactLabs, 
     FactInterventions, FactOutcomes, FactEvalResults, EvaluationRun
 )
+from app.evaluation_agent import (
+    run_evaluation_for_patient, run_batch_evaluation, 
+    get_evaluation_run_status, get_cached_evaluation
+)
+from app.reports import get_trending_outcomes, get_pathway_adoption
 
 load_dotenv()
 
@@ -1345,6 +1350,62 @@ async def get_rl_scenarios(limit: int = 100, offset: int = 0, risk_level: Option
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to load scenarios: {str(e)}")
+
+@app.post("/api/evaluation/run")
+async def run_evaluation(
+    patient_ids: Optional[List[str]] = None,
+    samples: int = 500,
+    seed: Optional[int] = None,
+    use_cache: bool = True,
+    db: AsyncSession = Depends(get_db)
+):
+    """Run batch Monte Carlo evaluation across patients with caching"""
+    try:
+        result = await run_batch_evaluation(patient_ids, samples, seed, db, use_cache)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Evaluation failed: {str(e)}")
+
+@app.get("/api/evaluation/status/{run_id}")
+async def evaluation_status(run_id: int, db: AsyncSession = Depends(get_db)):
+    """Get status of an evaluation run"""
+    result = await get_evaluation_run_status(run_id, db)
+    if "error" in result:
+        raise HTTPException(status_code=404, detail=result["error"])
+    return result
+
+@app.get("/api/evaluation/cached/{patient_id}")
+async def get_cached_eval(
+    patient_id: str,
+    samples: int = 500,
+    seed: Optional[int] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get cached evaluation result for a patient"""
+    result = await get_cached_evaluation(patient_id, samples, seed, db)
+    if not result:
+        raise HTTPException(status_code=404, detail="No cached evaluation found")
+    return result
+
+@app.get("/api/reports/outcomes")
+async def get_outcomes_report(
+    window: str = "weekly",
+    risk_level: Optional[str] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get trending outcomes data for Report tab"""
+    cohort_filter = {"risk_level": risk_level} if risk_level else None
+    result = await get_trending_outcomes(window, cohort_filter, db)
+    return result
+
+@app.get("/api/reports/pathway-adoption")
+async def get_pathway_report(
+    window: str = "weekly",
+    db: AsyncSession = Depends(get_db)
+):
+    """Get pathway adoption trends over time"""
+    result = await get_pathway_adoption(window, db)
+    return result
 
 @app.get("/api/patients/{patient_id}/early-warning")
 async def get_early_warning(patient_id: str):
