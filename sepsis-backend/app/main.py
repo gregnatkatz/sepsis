@@ -43,6 +43,16 @@ client = AzureOpenAI(
     azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
 )
 
+def get_llm(model_override: Optional[str] = None) -> Any:
+    """Get LLM client with optional model override from query param"""
+    if model_override:
+        try:
+            model_type = ModelType(model_override)
+            return get_llm_client(model_type)
+        except ValueError:
+            pass  # Fall back to default
+    return get_llm_client()
+
 class ChatRequest(BaseModel):
     message: str
     patient_id: Optional[str] = None
