@@ -10,7 +10,7 @@ import hashlib
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import FactEvalResults, EvaluationRun, DimPatient
-from app.monte_carlo import run_monte_carlo_simulation
+from app.monte_carlo import run_monte_carlo
 import asyncio
 
 
