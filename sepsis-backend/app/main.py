@@ -1029,7 +1029,7 @@ async def monte_carlo_what_if(patient_id: str, params: Dict[str, Any] = None):
     
     if params is None:
         params = {}
-    samples = params.get("samples", 100)
+    samples = params.get("samples", 500)  # Default to 500 for high-fidelity results
     seed = params.get("seed", None)
     
     try:
