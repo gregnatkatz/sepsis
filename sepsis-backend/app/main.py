@@ -1011,6 +1011,120 @@ Predict the physiological effects, risk reduction, SOFA score change, and confid
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/patients/{patient_id}/what-if/monte-carlo")
+async def monte_carlo_what_if(patient_id: str, params: Dict[str, Any] = None):
+    """
+    Monte Carlo What-If Simulator: Generate top 3 treatment pathways with 100x simulation
+    Auto-recommends fluids, vasopressors, antibiotics based on patient state
+    """
+    from app.monte_carlo import (
+        generate_candidate_treatments,
+        run_monte_carlo,
+        rank_pathways
+    )
+    
+    patient = next((p for p in MOCK_PATIENTS if p["id"] == patient_id), None)
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    
+    if params is None:
+        params = {}
+    samples = params.get("samples", 100)
+    seed = params.get("seed", None)
+    
+    try:
+        candidates = generate_candidate_treatments(patient)
+        
+        monte_carlo_results = []
+        for candidate in candidates:
+            result = run_monte_carlo(patient, candidate, samples=samples, seed=seed)
+            
+            result["treatment_details"] = {
+                "fluids": {
+                    "volume_ml": candidate.fluids_ml,
+                    "type": candidate.fluids_type.value,
+                    "rate_ml_hr": candidate.fluids_rate_ml_hr
+                },
+                "vasopressor": {
+                    "type": candidate.vasopressor.value,
+                    "dose_mcg_kg_min": candidate.vasopressor_dose_mcg_kg_min,
+                    "timing_min": candidate.vasopressor_timing_min
+                },
+                "antibiotics": {
+                    "coverage": candidate.antibiotics.value,
+                    "timing_min": candidate.antibiotics_timing_min
+                },
+                "reassessment_intervals_min": candidate.reassessment_intervals_min
+            }
+            
+            monte_carlo_results.append(result)
+        
+        ranked_pathways = rank_pathways(monte_carlo_results)
+        
+        top_3 = ranked_pathways[:3]
+        
+        for pathway in top_3:
+            rationale = await _generate_pathway_rationale(patient, pathway)
+            pathway["clinical_rationale"] = rationale
+        
+        return {
+            "patient_id": patient_id,
+            "patient_name": patient.get("name"),
+            "risk_level": patient.get("risk_level"),
+            "risk_score": patient.get("risk_score"),
+            "simulation_params": {
+                "samples_per_pathway": samples,
+                "total_simulations": len(candidates) * samples,
+                "candidates_evaluated": len(candidates)
+            },
+            "top_3_pathways": top_3,
+            "all_pathways": ranked_pathways,
+            "generated_at": datetime.utcnow().isoformat() + "Z"
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Monte Carlo simulation failed: {str(e)}")
+
+async def _generate_pathway_rationale(patient: Dict[str, Any], pathway: Dict[str, Any]) -> str:
+    """Generate clinical rationale for a treatment pathway using LLM"""
+    try:
+        vitals = patient.get('vitals', {}).get('current', {})
+        labs = patient.get('labs', {}).get('current', {})
+        
+        prompt = f"""Provide a brief clinical rationale (2-3 sentences) for this sepsis treatment pathway:
+
+Patient: {patient.get('name')}, {patient.get('age')}y, Risk: {patient.get('risk_level')} ({patient.get('risk_score')}/100)
+Current: BP {vitals.get('blood_pressure')}, HR {vitals.get('heart_rate')}, Lactate {labs.get('lactate')}
+
+Pathway: {pathway['candidate_name']}
+Treatment:
+- Fluids: {pathway['treatment_details']['fluids']['volume_ml']}mL {pathway['treatment_details']['fluids']['type']} at {pathway['treatment_details']['fluids']['rate_ml_hr']}mL/hr
+- Vasopressor: {pathway['treatment_details']['vasopressor']['type']} at {pathway['treatment_details']['vasopressor']['dose_mcg_kg_min']} mcg/kg/min (start at {pathway['treatment_details']['vasopressor']['timing_min']}min)
+- Antibiotics: {pathway['treatment_details']['antibiotics']['coverage']} (start at {pathway['treatment_details']['antibiotics']['timing_min']}min)
+
+Expected Outcomes (from {pathway['samples']} simulations):
+- Survival: {pathway['expected_outcomes']['survival_prob']['mean']:.1%} (±{pathway['expected_outcomes']['survival_prob']['std']:.1%})
+- Time to Stability: {pathway['expected_outcomes']['time_to_stability_hr']['mean']:.1f}h (±{pathway['expected_outcomes']['time_to_stability_hr']['std']:.1f}h)
+- Organ Preservation: {pathway['expected_outcomes']['organ_preservation_score']['mean']:.0f}/100
+
+Explain why this pathway is appropriate for this patient's condition."""
+
+        llm_client = get_llm_client()
+        response = await llm_client.get_completion_text(
+            messages=[
+                {"role": "system", "content": "You are a critical care physician explaining treatment decisions."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.5,
+            max_tokens=200,
+            timeout=30.0
+        )
+        
+        return response.strip()
+    
+    except Exception as e:
+        return f"This pathway balances {pathway['candidate_name'].lower()} approach with expected outcomes."
+
 @app.get("/api/patients/{patient_id}/early-warning")
 async def get_early_warning(patient_id: str):
     """Multi-Agent Early Warning System: 6 specialized agents analyzing patient deterioration"""
