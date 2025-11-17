@@ -1513,6 +1513,38 @@ function App() {
                 </Card>
               </div>
             )}
+
+            {currentView === 'report' && (
+              <div className="space-y-6">
+                <Card className="bg-dark-card border-gray-700">
+                  <CardHeader>
+                    <CardTitle className="flex items-center space-x-2 text-white">
+                      <TrendingUp className="w-5 h-5 text-teams-purple" />
+                      <span>AI/RL Impact Report</span>
+                    </CardTitle>
+                    <CardDescription className="text-gray-400">
+                      Trending outcomes showing how AI and reinforcement learning are improving sepsis care
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-center py-12">
+                      <TrendingUp className="w-16 h-16 mx-auto mb-4 text-gray-600" />
+                      <p className="text-gray-400 mb-2">Report Tab - Coming Soon</p>
+                      <p className="text-sm text-gray-500">
+                        This tab will show trending visualizations including:
+                        <br />• Survival probability trends (with p25-p75 bands)
+                        <br />• Time to stability trends (with p25-p75 bands)
+                        <br />• Sepsis bundle compliance trending up
+                        <br />• Early warning lead time trending up
+                        <br />• Pathway adoption mix (stacked area chart)
+                        <br />• Delta vs baseline comparison
+                        <br />• Executive summary with key metrics
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
           </div>
         </div>
       </div>
