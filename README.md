@@ -63,11 +63,8 @@ The Sepsis Prevention Copilot solves these problems through three breakthrough c
 
 ![AI/RL Impact Report](screenshots/localhost_5174_204121.png)
 
-**Financial Impact (500-bed hospital):**
-- 💰 **$6-10M annual savings** from reduced ICU stays and complications
-- 🎯 **50-90 lives saved per year** through early intervention
-- 📈 **10-15X ROI** on implementation costs
-- ⏱️ **2,000+ nursing hours saved** annually through workflow automation
+**Demonstration Scope:**
+This is a proof-of-concept demonstration showcasing AI/ML capabilities for sepsis prevention. The synthetic data and simulated outcomes demonstrate the technical approach and methodology. Clinical validation and real-world impact metrics would require deployment in actual healthcare settings with IRB approval and rigorous clinical trials.
 
 ## 🚀 Game-Changing Features
 
@@ -314,11 +311,11 @@ AZURE_OPENAI_API_KEY=<YOUR_AZURE_OPENAI_API_KEY>
 4. **Token Limits**: Set max_tokens to prevent runaway costs
 5. **Streaming**: Use streaming responses to show progress and reduce perceived latency
 
-**Estimated Costs (500-bed hospital):**
-- **Monthly API Costs**: $2,000-$4,000 depending on usage
+**Estimated API Costs (demonstration scale):**
+- **Monthly API Costs**: $100-$500 for development/testing with 26 patients
 - **Cost per Patient Evaluation**: $0.05-$0.15 (500 Monte Carlo simulations)
 - **Cost per Clinical Insight**: $0.01-$0.03 (GPT-5 analysis)
-- **ROI**: 10-15X return through reduced ICU stays and improved outcomes
+- **Note**: Production deployment costs would scale with patient volume and usage patterns
 
 ## 📊 Monte Carlo Simulation Methodology
 
@@ -655,17 +652,19 @@ Each patient includes:
 - 3 moderate-risk patients (11.5%)
 - 21 low-risk stable patients (80.8%)
 
-### Expected Outcomes
+### Demonstration Capabilities
 
-**With Sepsis Prevention Copilot:**
-- 🎯 **50-90 lives saved per year** (per 500-bed hospital)
-- 💰 **$6-10M annual savings** (reduced ICU stays, complications)
-- 📈 **10-15X ROI** on implementation costs
-- ⏱️ **30-60 min faster intervention** with predictive alerts
-- 🏆 **Improved quality metrics** (CMS, Joint Commission)
-- 📊 **18% higher survival rates** with AI-optimized pathways
-- ⚡ **33% faster time to stability** with personalized treatment
-- ✅ **35% improvement in bundle compliance** with workflow automation
+**Technical Features Demonstrated:**
+- 🤖 **Multi-model AI integration** with Azure OpenAI (GPT-5, model-router, DeepSeek, O3)
+- 📊 **Monte Carlo simulation** with 500 samples per pathway for outcome prediction
+- 🧠 **Reinforcement learning** for treatment pathway optimization
+- 📈 **Uncertainty quantification** with p25-p75 confidence bands
+- 🎯 **Multi-agent architecture** with 6 specialized clinical agents
+- 🗣️ **Voice interface** using Azure OpenAI Realtime API
+- 💾 **Star schema database** for scalable patient data management
+- 📉 **Trending analytics** showing AI/RL impact over time
+
+**Note:** Clinical outcomes and financial impact would require real-world deployment, IRB approval, and rigorous clinical validation. This demonstration uses synthetic data to showcase the technical methodology and AI/ML capabilities.
 
 ## 🔐 Security & Compliance
 
