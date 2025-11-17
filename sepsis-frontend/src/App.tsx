@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart, Bar } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart, Bar, AreaChart, Area } from 'recharts'
 import { AGUIClient } from './aguiClient'
 
 const API_URL = (import.meta.env.VITE_API_URL && import.meta.env.VITE_API_URL.trim() !== '') 
@@ -111,6 +111,8 @@ function App() {
   const [loadingWhatIf, setLoadingWhatIf] = useState(false)
   const [rlResults, setRlResults] = useState<any>(null)
   const [loadingRlResults, setLoadingRlResults] = useState(false)
+  const [reportData, setReportData] = useState<any>(null)
+  const [loadingReport, setLoadingReport] = useState(false)
   const [monteCarloPathways, setMonteCarloPathways] = useState<any>(null)
   const [selectedPathway, setSelectedPathway] = useState<number>(0)
   const [loadingMonteCarlo, setLoadingMonteCarlo] = useState(false)
@@ -132,7 +134,10 @@ function App() {
     if (currentView === 'rl-analytics' && !rlResults && !loadingRlResults) {
       fetchRlResults()
     }
-  }, [currentView])
+    if (currentView === 'report' && !reportData && !loadingReport) {
+      fetchReportData()
+    }
+  }, [currentView, rlResults, loadingRlResults, reportData, loadingReport])
 
   const fetchPatients = async () => {
     try {
@@ -158,6 +163,21 @@ function App() {
       console.error('Error fetching RL results:', error)
     } finally {
       setLoadingRlResults(false)
+    }
+  }
+
+  const fetchReportData = async () => {
+    setLoadingReport(true)
+    try {
+      const response = await fetch(`${API_URL}/api/reports/outcomes?window=weekly&use_synthetic=true`, {
+        headers: getAuthHeaders()
+      })
+      const data = await response.json()
+      setReportData(data)
+    } catch (error) {
+      console.error('Error fetching report data:', error)
+    } finally {
+      setLoadingReport(false)
     }
   }
 
@@ -1523,24 +1543,318 @@ function App() {
                       <span>AI/RL Impact Report</span>
                     </CardTitle>
                     <CardDescription className="text-gray-400">
-                      Trending outcomes showing how AI and reinforcement learning are improving sepsis care
+                      Trending outcomes showing how AI and reinforcement learning are improving sepsis care over 12 weeks
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-center py-12">
-                      <TrendingUp className="w-16 h-16 mx-auto mb-4 text-gray-600" />
-                      <p className="text-gray-400 mb-2">Report Tab - Coming Soon</p>
-                      <p className="text-sm text-gray-500">
-                        This tab will show trending visualizations including:
-                        <br />• Survival probability trends (with p25-p75 bands)
-                        <br />• Time to stability trends (with p25-p75 bands)
-                        <br />• Sepsis bundle compliance trending up
-                        <br />• Early warning lead time trending up
-                        <br />• Pathway adoption mix (stacked area chart)
-                        <br />• Delta vs baseline comparison
-                        <br />• Executive summary with key metrics
-                      </p>
-                    </div>
+                    {loadingReport ? (
+                      <div className="space-y-4">
+                        <Skeleton className="h-32 w-full bg-gray-700" />
+                        <Skeleton className="h-64 w-full bg-gray-700" />
+                        <Skeleton className="h-64 w-full bg-gray-700" />
+                      </div>
+                    ) : reportData ? (
+                      <div className="space-y-6">
+                        {/* Executive Summary */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <Card className="bg-dark border-gray-700">
+                            <CardContent className="pt-6">
+                              <div className="text-center">
+                                <p className="text-xs text-gray-400 mb-2">Survival Improvement</p>
+                                <p className="text-3xl font-bold text-green-400">
+                                  {reportData.executive_summary?.survival_improvement || '+0%'}
+                                </p>
+                                <p className="text-xs text-gray-500 mt-1">vs baseline</p>
+                              </div>
+                            </CardContent>
+                          </Card>
+                          <Card className="bg-dark border-gray-700">
+                            <CardContent className="pt-6">
+                              <div className="text-center">
+                                <p className="text-xs text-gray-400 mb-2">Time to Stability</p>
+                                <p className="text-3xl font-bold text-cyan-400">
+                                  {reportData.executive_summary?.time_reduction || '−0%'}
+                                </p>
+                                <p className="text-xs text-gray-500 mt-1">reduction</p>
+                              </div>
+                            </CardContent>
+                          </Card>
+                          <Card className="bg-dark border-gray-700">
+                            <CardContent className="pt-6">
+                              <div className="text-center">
+                                <p className="text-xs text-gray-400 mb-2">Bundle Compliance</p>
+                                <p className="text-3xl font-bold text-blue-400">
+                                  {reportData.executive_summary?.bundle_improvement || '+0%'}
+                                </p>
+                                <p className="text-xs text-gray-500 mt-1">improvement</p>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </div>
+
+                        {/* Survival Probability Trend */}
+                        <Card className="bg-dark border-gray-700">
+                          <CardHeader>
+                            <CardTitle className="text-white text-lg">Survival Probability Trending</CardTitle>
+                            <CardDescription className="text-gray-400">
+                              Patient survival rates improving with AI-guided treatment pathways
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <ResponsiveContainer width="100%" height={300}>
+                              <LineChart data={reportData.trending_data || []}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                <XAxis 
+                                  dataKey="week" 
+                                  stroke="#9CA3AF"
+                                  label={{ value: 'Week', position: 'insideBottom', offset: -5, fill: '#9CA3AF' }}
+                                />
+                                <YAxis 
+                                  stroke="#9CA3AF"
+                                  domain={[0.6, 1.0]}
+                                  tickFormatter={(value) => `${(value * 100).toFixed(0)}%`}
+                                />
+                                <Tooltip 
+                                  contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
+                                  labelStyle={{ color: '#F3F4F6' }}
+                                  formatter={(value: any) => [`${(value * 100).toFixed(1)}%`, '']}
+                                />
+                                <Legend />
+                                <Line 
+                                  type="monotone" 
+                                  dataKey="survival_prob.p25" 
+                                  stroke="#10B981" 
+                                  strokeWidth={1}
+                                  strokeDasharray="3 3"
+                                  dot={false}
+                                  name="p25"
+                                />
+                                <Line 
+                                  type="monotone" 
+                                  dataKey="survival_prob.mean" 
+                                  stroke="#10B981" 
+                                  strokeWidth={3}
+                                  name="Survival Rate"
+                                />
+                                <Line 
+                                  type="monotone" 
+                                  dataKey="survival_prob.p75" 
+                                  stroke="#10B981" 
+                                  strokeWidth={1}
+                                  strokeDasharray="3 3"
+                                  dot={false}
+                                  name="p75"
+                                />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </CardContent>
+                        </Card>
+
+                        {/* Time to Stability Trend */}
+                        <Card className="bg-dark border-gray-700">
+                          <CardHeader>
+                            <CardTitle className="text-white text-lg">Time to Stability Trending</CardTitle>
+                            <CardDescription className="text-gray-400">
+                              Faster patient stabilization with optimized treatment protocols
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <ResponsiveContainer width="100%" height={300}>
+                              <LineChart data={reportData.trending_data || []}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                <XAxis 
+                                  dataKey="week" 
+                                  stroke="#9CA3AF"
+                                  label={{ value: 'Week', position: 'insideBottom', offset: -5, fill: '#9CA3AF' }}
+                                />
+                                <YAxis 
+                                  stroke="#9CA3AF"
+                                  label={{ value: 'Hours', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }}
+                                />
+                                <Tooltip 
+                                  contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
+                                  labelStyle={{ color: '#F3F4F6' }}
+                                  formatter={(value: any) => [`${value.toFixed(1)}h`, '']}
+                                />
+                                <Legend />
+                                <Line 
+                                  type="monotone" 
+                                  dataKey="time_to_stability.p25" 
+                                  stroke="#06B6D4" 
+                                  strokeWidth={1}
+                                  strokeDasharray="3 3"
+                                  dot={false}
+                                  name="p25"
+                                />
+                                <Line 
+                                  type="monotone" 
+                                  dataKey="time_to_stability.mean" 
+                                  stroke="#06B6D4" 
+                                  strokeWidth={3}
+                                  name="Time to Stability"
+                                />
+                                <Line 
+                                  type="monotone" 
+                                  dataKey="time_to_stability.p75" 
+                                  stroke="#06B6D4" 
+                                  strokeWidth={1}
+                                  strokeDasharray="3 3"
+                                  dot={false}
+                                  name="p75"
+                                />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </CardContent>
+                        </Card>
+
+                        {/* Bundle Compliance Trend */}
+                        <Card className="bg-dark border-gray-700">
+                          <CardHeader>
+                            <CardTitle className="text-white text-lg">Sepsis Bundle Compliance</CardTitle>
+                            <CardDescription className="text-gray-400">
+                              Improved adherence to evidence-based sepsis care protocols
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <ResponsiveContainer width="100%" height={300}>
+                              <LineChart data={reportData.trending_data || []}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                <XAxis 
+                                  dataKey="week" 
+                                  stroke="#9CA3AF"
+                                  label={{ value: 'Week', position: 'insideBottom', offset: -5, fill: '#9CA3AF' }}
+                                />
+                                <YAxis 
+                                  stroke="#9CA3AF"
+                                  domain={[50, 100]}
+                                  tickFormatter={(value) => `${value}%`}
+                                />
+                                <Tooltip 
+                                  contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
+                                  labelStyle={{ color: '#F3F4F6' }}
+                                  formatter={(value: any) => [`${value.toFixed(1)}%`, '']}
+                                />
+                                <Legend />
+                                <Line 
+                                  type="monotone" 
+                                  dataKey="bundle_compliance.mean" 
+                                  stroke="#3B82F6" 
+                                  strokeWidth={3}
+                                  name="Bundle Compliance"
+                                />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </CardContent>
+                        </Card>
+
+                        {/* Pathway Adoption */}
+                        {reportData.trending_data && reportData.trending_data.length > 0 && (
+                          <Card className="bg-dark border-gray-700">
+                            <CardHeader>
+                              <CardTitle className="text-white text-lg">AI-Optimized Pathway Adoption</CardTitle>
+                              <CardDescription className="text-gray-400">
+                                Shift from standard protocols to AI-optimized treatment pathways
+                              </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                              <ResponsiveContainer width="100%" height={300}>
+                                <AreaChart data={reportData.trending_data || []}>
+                                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                  <XAxis 
+                                    dataKey="week" 
+                                    stroke="#9CA3AF"
+                                    label={{ value: 'Week', position: 'insideBottom', offset: -5, fill: '#9CA3AF' }}
+                                  />
+                                  <YAxis 
+                                    stroke="#9CA3AF"
+                                    tickFormatter={(value) => `${value}%`}
+                                  />
+                                  <Tooltip 
+                                    contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
+                                    labelStyle={{ color: '#F3F4F6' }}
+                                    formatter={(value: any) => [`${value?.toFixed(1) || 0}%`, '']}
+                                  />
+                                  <Legend />
+                                  <Area 
+                                    type="monotone" 
+                                    dataKey="pathway_distribution.ai_optimized" 
+                                    stackId="1"
+                                    stroke="#8B5CF6" 
+                                    fill="#8B5CF6"
+                                    name="AI Optimized"
+                                  />
+                                  <Area 
+                                    type="monotone" 
+                                    dataKey="pathway_distribution.standard" 
+                                    stackId="1"
+                                    stroke="#3B82F6" 
+                                    fill="#3B82F6"
+                                    name="Standard"
+                                  />
+                                  <Area 
+                                    type="monotone" 
+                                    dataKey="pathway_distribution.aggressive" 
+                                    stackId="1"
+                                    stroke="#F59E0B" 
+                                    fill="#F59E0B"
+                                    name="Aggressive"
+                                  />
+                                  <Area 
+                                    type="monotone" 
+                                    dataKey="pathway_distribution.conservative" 
+                                    stackId="1"
+                                    stroke="#10B981" 
+                                    fill="#10B981"
+                                    name="Conservative"
+                                  />
+                                </AreaChart>
+                              </ResponsiveContainer>
+                            </CardContent>
+                          </Card>
+                        )}
+
+                        {/* Summary Stats */}
+                        <Card className="bg-dark border-gray-700">
+                          <CardHeader>
+                            <CardTitle className="text-white text-lg">Summary Statistics</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                              <div>
+                                <p className="text-xs text-gray-400 mb-1">Total Patients</p>
+                                <p className="text-2xl font-bold text-white">
+                                  {reportData.executive_summary?.total_patients || 0}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-400 mb-1">Weeks Tracked</p>
+                                <p className="text-2xl font-bold text-white">
+                                  {reportData.executive_summary?.weeks_tracked || 0}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-400 mb-1">Baseline Survival</p>
+                                <p className="text-2xl font-bold text-white">
+                                  {((reportData.baseline?.survival_prob || 0) * 100).toFixed(1)}%
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-400 mb-1">Current Survival</p>
+                                <p className="text-2xl font-bold text-green-400">
+                                  {((reportData.current?.survival_prob || 0) * 100).toFixed(1)}%
+                                </p>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    ) : (
+                      <div className="text-center py-12">
+                        <TrendingUp className="w-16 h-16 mx-auto mb-4 text-gray-600" />
+                        <p className="text-gray-400 mb-2">No report data available</p>
+                        <p className="text-sm text-gray-500">Unable to load trending outcomes data</p>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </div>
