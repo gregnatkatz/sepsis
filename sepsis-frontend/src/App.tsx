@@ -81,7 +81,7 @@ interface Patient {
 function App() {
   const [patients, setPatients] = useState<Patient[]>([])
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null)
-  const [currentView, setCurrentView] = useState<'dashboard' | 'table' | 'chat' | 'rl-analytics'>('dashboard')
+  const [currentView, setCurrentView] = useState<'dashboard' | 'table' | 'chat' | 'rl-analytics' | 'report'>('dashboard')
   const [isListening, setIsListening] = useState(false)
   const [transcript, setTranscript] = useState('')
   const [chatMessages, setChatMessages] = useState<Array<{ role: string; content: string }>>([])
@@ -636,6 +636,17 @@ function App() {
             >
               <BarChart3 className="w-4 h-4 inline mr-2" />
               RL Analytics
+            </button>
+            <button
+              onClick={() => setCurrentView('report')}
+              className={`px-6 py-3 font-medium transition-colors ${
+                currentView === 'report'
+                  ? 'text-teams-purple border-b-2 border-teams-purple'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <TrendingUp className="w-4 h-4 inline mr-2" />
+              Report
             </button>
           </div>
         </div>
