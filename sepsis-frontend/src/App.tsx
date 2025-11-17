@@ -1847,12 +1847,7 @@ function App() {
                               <div className="grid grid-cols-3 gap-2">
                                 {(monteCarloPathways.top_3_pathways || []).map((pathway: any, idx: number) => {
                                   const survivalProb = pathway.expected_outcomes?.survival_prob?.mean ?? 0
-                                  const survivalP25 = pathway.expected_outcomes?.survival_prob?.p25 ?? null
-                                  const survivalP75 = pathway.expected_outcomes?.survival_prob?.p75 ?? null
                                   const timeToStability = pathway.expected_outcomes?.time_to_stability_hr?.mean ?? 0
-                                  const timeP25 = pathway.expected_outcomes?.time_to_stability_hr?.p25 ?? null
-                                  const timeP75 = pathway.expected_outcomes?.time_to_stability_hr?.p75 ?? null
-                                  const organScore = pathway.expected_outcomes?.organ_preservation_score?.mean ?? 0
                                   const abxCoverage = (pathway.treatment_details?.antibiotics?.coverage || '').toLowerCase()
                                   const vasopressorType = (pathway.treatment_details?.vasopressor?.type || '').toLowerCase()
                                   const hasAntibiotics = abxCoverage !== 'none' && abxCoverage !== ''
