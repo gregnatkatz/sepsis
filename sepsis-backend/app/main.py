@@ -1125,6 +1125,120 @@ Explain why this pathway is appropriate for this patient's condition."""
     except Exception as e:
         return f"This pathway balances {pathway['candidate_name'].lower()} approach with expected outcomes."
 
+@app.post("/api/patients/{patient_id}/what-if/evaluate")
+async def evaluate_custom_pathway(patient_id: str, params: Dict[str, Any]):
+    """
+    Evaluate custom treatment parameters with quick Monte Carlo preview (30-50 simulations)
+    Used for "Preview with my changes" button in What-If Simulator
+    """
+    from app.monte_carlo import (
+        Candidate,
+        FluidsType,
+        VasopressorType,
+        AntibioticCoverage,
+        run_monte_carlo
+    )
+    
+    patient = next((p for p in MOCK_PATIENTS if p["id"] == patient_id), None)
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    
+    fluids_ml = params.get("fluids_ml", 0)
+    antibiotics = params.get("antibiotics", False)
+    vasopressors = params.get("vasopressors", False)
+    samples = params.get("samples", 30)  # Quick preview with fewer samples
+    
+    try:
+        candidate = Candidate(
+            name="Custom Parameters",
+            fluids_ml=fluids_ml,
+            fluids_type=FluidsType.CRYSTALLOID,
+            fluids_rate_ml_hr=min(fluids_ml, 1000),  # Cap at 1000 mL/hr
+            vasopressor=VasopressorType.NOREPINEPHRINE if vasopressors else VasopressorType.NONE,
+            vasopressor_dose_mcg_kg_min=0.05 if vasopressors else 0.0,
+            vasopressor_timing_min=30 if vasopressors else 0,
+            antibiotics=AntibioticCoverage.BROAD if antibiotics else AntibioticCoverage.NONE,
+            antibiotics_timing_min=45 if antibiotics else 0,
+            reassessment_intervals_min=[30, 60, 120, 240]
+        )
+        
+        result = run_monte_carlo(patient, candidate, samples=samples, seed=None)
+        
+        outcomes = result.get("expected_outcomes", {})
+        
+        return {
+            "patient_id": patient_id,
+            "custom_parameters": {
+                "fluids_ml": fluids_ml,
+                "antibiotics": antibiotics,
+                "vasopressors": vasopressors
+            },
+            "survival_probability": outcomes.get("survival_prob", {}).get("mean", 0.0),
+            "time_to_stability_hours": outcomes.get("time_to_stability_hr", {}).get("mean", 0.0),
+            "organ_preservation_score": outcomes.get("organ_preservation_score", {}).get("mean", 0.0),
+            "confidence_intervals": {
+                "survival_ci": [
+                    outcomes.get("survival_prob", {}).get("ci_lower", 0.0),
+                    outcomes.get("survival_prob", {}).get("ci_upper", 0.0)
+                ],
+                "stability_ci": [
+                    outcomes.get("time_to_stability_hr", {}).get("ci_lower", 0.0),
+                    outcomes.get("time_to_stability_hr", {}).get("ci_upper", 0.0)
+                ],
+                "organ_ci": [
+                    outcomes.get("organ_preservation_score", {}).get("ci_lower", 0.0),
+                    outcomes.get("organ_preservation_score", {}).get("ci_upper", 0.0)
+                ]
+            },
+            "samples": samples,
+            "generated_at": datetime.utcnow().isoformat() + "Z"
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Custom pathway evaluation failed: {str(e)}")
+
+@app.get("/api/rl/results")
+async def get_rl_results():
+    """Get RL batch evaluation results with learning curves and insights"""
+    results_path = Path(__file__).parent / "data" / "rl_batch_results.json"
+    
+    if not results_path.exists():
+        raise HTTPException(status_code=404, detail="RL results not found. Run batch evaluation first.")
+    
+    try:
+        with open(results_path, 'r') as f:
+            results = json.load(f)
+        return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load RL results: {str(e)}")
+
+@app.get("/api/rl/scenarios")
+async def get_rl_scenarios(limit: int = 100, offset: int = 0, risk_level: Optional[str] = None):
+    """Get paginated RL scenario results from comprehensive table"""
+    csv_path = Path(__file__).parent / "data" / "comprehensive_table.csv"
+    
+    if not csv_path.exists():
+        raise HTTPException(status_code=404, detail="Scenario data not found. Run batch evaluation first.")
+    
+    try:
+        import pandas as pd
+        df = pd.read_csv(csv_path)
+        
+        if risk_level:
+            df = df[df['risk_level'] == risk_level.upper()]
+        
+        total = len(df)
+        df_page = df.iloc[offset:offset+limit]
+        
+        return {
+            "total": total,
+            "offset": offset,
+            "limit": limit,
+            "scenarios": df_page.to_dict(orient='records')
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load scenarios: {str(e)}")
+
 @app.get("/api/patients/{patient_id}/early-warning")
 async def get_early_warning(patient_id: str):
     """Multi-Agent Early Warning System: 6 specialized agents analyzing patient deterioration"""
