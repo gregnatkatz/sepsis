@@ -198,6 +198,188 @@ Background worker for running 500-simulation evaluations across all patients wit
 - Runs 500 Monte Carlo simulations per patient per pathway
 - Aggregates results with p25/p50/p75 percentiles for uncertainty quantification
 
+## 🎯 AG-UI (Agentic UI Protocol)
+
+### Event-Driven Architecture for Unified Modalities
+
+AG-UI provides a standardized WebSocket-based protocol for real-time, bidirectional communication between the frontend and AI agents. This enables seamless integration of text, voice, and tool-based interactions in a single unified stream.
+
+**Key Features:**
+- **Session Management**: Server-side session tracking with secure token-based authentication
+- **Event Streaming**: Real-time updates via WebSocket with standardized event schema
+- **Multi-Modal Support**: Text input, voice interface, and tool calls in one protocol
+- **Patient Context**: Automatic patient context management across interactions
+
+**Event Schema:**
+```typescript
+{
+  id: string,           // Unique event ID
+  type: string,         // Event type (e.g., "agent.response.delta")
+  sessionId: string,    // Session identifier
+  ts: string,           // ISO timestamp
+  payload: object       // Event-specific data
+}
+```
+
+**Supported Event Types:**
+- `session.ready` - Session initialized and ready
+- `patient.opened` - Patient context loaded
+- `ui.chart.update` - Chart data updated with new trends
+- `agent.response.delta` - Streaming AI response chunk
+- `agent.response.done` - AI response complete
+- `tool.call` - Request to execute a tool
+- `tool.result` - Tool execution result
+- `error` - Error occurred
+
+**Backend Implementation:**
+```python
+# Create AG-UI session
+POST /api/agui/session
+{
+  "patientId": "optional-patient-id"
+}
+
+# Connect to WebSocket
+WebSocket /api/agui/ws?token={session_token}
+```
+
+**Frontend Integration:**
+```typescript
+import { AGUIClient } from './aguiClient'
+
+// Initialize client
+const client = new AGUIClient(API_URL)
+await client.createSession(patientId)
+await client.connect()
+
+// Listen for events
+client.on('agent.response.delta', (event) => {
+  console.log(event.payload.content)
+})
+
+// Send events
+client.send('input.text', { message: 'Analyze patient vitals' })
+```
+
+**How to Enable:**
+- Add `?agui=1` to the URL: `http://localhost:5174?agui=1`
+- Or set environment variable: `VITE_USE_AGUI=true`
+
+**Use Cases:**
+- Real-time AI clinical analysis streaming
+- Voice-enabled patient interaction
+- Live chart updates as data changes
+- Multi-agent coordination and status updates
+
+## ⚡ Microsoft Agent Lightning Integration
+
+### Trajectory Logging and Offline Reinforcement Learning
+
+Agent Lightning provides a framework for logging agent trajectories, calculating rewards, and enabling offline reinforcement learning for clinical decision support optimization.
+
+**Key Capabilities:**
+- **Trajectory Logging**: Capture state-action-reward sequences for all agent interactions
+- **Reward Functions**: Domain-specific reward calculations for each clinical feature
+- **Offline RL**: Train policies from logged trajectories without online patient interaction
+- **Multi-Feature Support**: Separate reward functions for forecasting, actions, bundles, what-if, and early warning
+
+**Reward Components by Feature:**
+
+**1. Horizon Forecast Rewards:**
+- Accuracy: How close forecast matches actual outcome
+- Calibration: Confidence aligns with accuracy
+- Early detection: Bonus for detecting deterioration early
+- Penalty: Large deviations from current state
+
+**2. Next Best Action Rewards:**
+- Appropriateness: Action urgency matches risk level
+- Specificity: Concrete vs vague recommendations
+- Prioritization: Most critical actions first
+
+**3. Sepsis Bundle Rewards:**
+- Completion rate: Tasks completed on time
+- Prioritization: Critical tasks first
+- Time efficiency: Faster completion
+
+**4. What-If Simulation Rewards:**
+- Risk reduction: Predicted improvement magnitude
+- Physiological plausibility: Realistic predictions
+- Confidence: Appropriate uncertainty quantification
+
+**5. Early Warning System Rewards:**
+- Agent consensus: Agreement among specialized agents
+- Severity alignment: EWS score matches ground truth
+- Actionability: Clear, specific recommendations
+
+**Backend Integration:**
+```python
+from app.agent_lightning_integration import get_agent_lightning
+
+# Initialize Agent Lightning
+lightning = get_agent_lightning()
+
+# Start rollout for a patient
+rollout = await lightning.start_rollout(
+    patient_id="patient-123",
+    feature="horizon_forecast"
+)
+
+# Log state
+state = lightning.log_state(patient_data)
+
+# Log action
+action = lightning.log_action("forecast", prediction_data)
+
+# Calculate reward
+reward = lightning.calculate_reward(
+    feature="horizon_forecast",
+    patient_data=patient_data,
+    prediction=prediction,
+    outcome=actual_outcome  # Optional
+)
+
+# Emit reward for trajectory
+await lightning.emit_trajectory_reward(reward)
+```
+
+**Reward Calculation Example:**
+```python
+# Horizon forecast reward calculation
+reward = 0.0
+
+# Accuracy component
+if correctly_predicted_worsening:
+    reward += 1.0
+elif correctly_predicted_stability:
+    reward += 0.5
+
+# Calibration component
+if 0.3 <= confidence <= 0.9:
+    reward += 0.5
+
+# Penalty for unrealistic predictions
+if abs(forecast - current) > 30:
+    reward -= 0.5
+
+return reward
+```
+
+**Offline RL Workflow:**
+1. **Collect Trajectories**: Log all agent interactions with rewards
+2. **Store in Lightning Store**: Persist trajectories for batch training
+3. **Train Policies**: Use offline RL algorithms (CQL, IQL, etc.)
+4. **Evaluate**: Test policies on held-out patient scenarios
+5. **Deploy**: Update production agents with improved policies
+
+**Configuration:**
+```bash
+# Environment variables (use placeholders in .env.example)
+AGENT_LIGHTNING_STORE_URL=<YOUR_LIGHTNING_STORE_URL>
+AGENT_LIGHTNING_API_KEY=<YOUR_LIGHTNING_API_KEY>
+```
+
+**Note:** Agent Lightning integration is implemented but not actively logging in this demonstration. Production deployment would enable full trajectory logging and offline RL training loops.
+
 ## 🤖 Azure OpenAI Integration: Deep Dive
 
 ### Model Architecture
