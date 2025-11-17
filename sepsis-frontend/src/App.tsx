@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart, Bar } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart, Bar, AreaChart, Area } from 'recharts'
 import { AGUIClient } from './aguiClient'
 
 const API_URL = (import.meta.env.VITE_API_URL && import.meta.env.VITE_API_URL.trim() !== '') 
@@ -81,7 +81,7 @@ interface Patient {
 function App() {
   const [patients, setPatients] = useState<Patient[]>([])
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null)
-  const [currentView, setCurrentView] = useState<'dashboard' | 'table' | 'chat' | 'rl-analytics'>('dashboard')
+  const [currentView, setCurrentView] = useState<'dashboard' | 'table' | 'chat' | 'rl-analytics' | 'report'>('dashboard')
   const [isListening, setIsListening] = useState(false)
   const [transcript, setTranscript] = useState('')
   const [chatMessages, setChatMessages] = useState<Array<{ role: string; content: string }>>([])
@@ -111,6 +111,8 @@ function App() {
   const [loadingWhatIf, setLoadingWhatIf] = useState(false)
   const [rlResults, setRlResults] = useState<any>(null)
   const [loadingRlResults, setLoadingRlResults] = useState(false)
+  const [reportData, setReportData] = useState<any>(null)
+  const [loadingReport, setLoadingReport] = useState(false)
   const [monteCarloPathways, setMonteCarloPathways] = useState<any>(null)
   const [selectedPathway, setSelectedPathway] = useState<number>(0)
   const [loadingMonteCarlo, setLoadingMonteCarlo] = useState(false)
@@ -132,7 +134,10 @@ function App() {
     if (currentView === 'rl-analytics' && !rlResults && !loadingRlResults) {
       fetchRlResults()
     }
-  }, [currentView])
+    if (currentView === 'report' && !reportData && !loadingReport) {
+      fetchReportData()
+    }
+  }, [currentView, rlResults, loadingRlResults, reportData, loadingReport])
 
   const fetchPatients = async () => {
     try {
@@ -158,6 +163,21 @@ function App() {
       console.error('Error fetching RL results:', error)
     } finally {
       setLoadingRlResults(false)
+    }
+  }
+
+  const fetchReportData = async () => {
+    setLoadingReport(true)
+    try {
+      const response = await fetch(`${API_URL}/api/reports/outcomes?window=weekly&use_synthetic=true`, {
+        headers: getAuthHeaders()
+      })
+      const data = await response.json()
+      setReportData(data)
+    } catch (error) {
+      console.error('Error fetching report data:', error)
+    } finally {
+      setLoadingReport(false)
     }
   }
 
@@ -636,6 +656,17 @@ function App() {
             >
               <BarChart3 className="w-4 h-4 inline mr-2" />
               RL Analytics
+            </button>
+            <button
+              onClick={() => setCurrentView('report')}
+              className={`px-6 py-3 font-medium transition-colors ${
+                currentView === 'report'
+                  ? 'text-teams-purple border-b-2 border-teams-purple'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <TrendingUp className="w-4 h-4 inline mr-2" />
+              Report
             </button>
           </div>
         </div>
@@ -1502,6 +1533,332 @@ function App() {
                 </Card>
               </div>
             )}
+
+            {currentView === 'report' && (
+              <div className="space-y-6">
+                <Card className="bg-dark-card border-gray-700">
+                  <CardHeader>
+                    <CardTitle className="flex items-center space-x-2 text-white">
+                      <TrendingUp className="w-5 h-5 text-teams-purple" />
+                      <span>AI/RL Impact Report</span>
+                    </CardTitle>
+                    <CardDescription className="text-gray-400">
+                      Trending outcomes showing how AI and reinforcement learning are improving sepsis care over 12 weeks
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {loadingReport ? (
+                      <div className="space-y-4">
+                        <Skeleton className="h-32 w-full bg-gray-700" />
+                        <Skeleton className="h-64 w-full bg-gray-700" />
+                        <Skeleton className="h-64 w-full bg-gray-700" />
+                      </div>
+                    ) : reportData ? (
+                      <div className="space-y-6">
+                        {/* Executive Summary */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <Card className="bg-dark border-gray-700">
+                            <CardContent className="pt-6">
+                              <div className="text-center">
+                                <p className="text-xs text-gray-400 mb-2">Survival Improvement</p>
+                                <p className="text-3xl font-bold text-green-400">
+                                  {reportData.executive_summary?.survival_improvement || '+0%'}
+                                </p>
+                                <p className="text-xs text-gray-500 mt-1">vs baseline</p>
+                              </div>
+                            </CardContent>
+                          </Card>
+                          <Card className="bg-dark border-gray-700">
+                            <CardContent className="pt-6">
+                              <div className="text-center">
+                                <p className="text-xs text-gray-400 mb-2">Time to Stability</p>
+                                <p className="text-3xl font-bold text-cyan-400">
+                                  {reportData.executive_summary?.time_reduction || '−0%'}
+                                </p>
+                                <p className="text-xs text-gray-500 mt-1">reduction</p>
+                              </div>
+                            </CardContent>
+                          </Card>
+                          <Card className="bg-dark border-gray-700">
+                            <CardContent className="pt-6">
+                              <div className="text-center">
+                                <p className="text-xs text-gray-400 mb-2">Bundle Compliance</p>
+                                <p className="text-3xl font-bold text-blue-400">
+                                  {reportData.executive_summary?.bundle_improvement || '+0%'}
+                                </p>
+                                <p className="text-xs text-gray-500 mt-1">improvement</p>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </div>
+
+                        {/* Survival Probability Trend */}
+                        <Card className="bg-dark border-gray-700">
+                          <CardHeader>
+                            <CardTitle className="text-white text-lg">Survival Probability Trending</CardTitle>
+                            <CardDescription className="text-gray-400">
+                              Patient survival rates improving with AI-guided treatment pathways
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <ResponsiveContainer width="100%" height={300}>
+                              <LineChart data={reportData.trending_data || []}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                <XAxis 
+                                  dataKey="week" 
+                                  stroke="#9CA3AF"
+                                  label={{ value: 'Week', position: 'insideBottom', offset: -5, fill: '#9CA3AF' }}
+                                />
+                                <YAxis 
+                                  stroke="#9CA3AF"
+                                  domain={[0.6, 1.0]}
+                                  tickFormatter={(value) => `${(value * 100).toFixed(0)}%`}
+                                />
+                                <Tooltip 
+                                  contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
+                                  labelStyle={{ color: '#F3F4F6' }}
+                                  formatter={(value: any) => [`${(value * 100).toFixed(1)}%`, '']}
+                                />
+                                <Legend />
+                                <Line 
+                                  type="monotone" 
+                                  dataKey="survival_prob.p25" 
+                                  stroke="#10B981" 
+                                  strokeWidth={1}
+                                  strokeDasharray="3 3"
+                                  dot={false}
+                                  name="p25"
+                                />
+                                <Line 
+                                  type="monotone" 
+                                  dataKey="survival_prob.mean" 
+                                  stroke="#10B981" 
+                                  strokeWidth={3}
+                                  name="Survival Rate"
+                                />
+                                <Line 
+                                  type="monotone" 
+                                  dataKey="survival_prob.p75" 
+                                  stroke="#10B981" 
+                                  strokeWidth={1}
+                                  strokeDasharray="3 3"
+                                  dot={false}
+                                  name="p75"
+                                />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </CardContent>
+                        </Card>
+
+                        {/* Time to Stability Trend */}
+                        <Card className="bg-dark border-gray-700">
+                          <CardHeader>
+                            <CardTitle className="text-white text-lg">Time to Stability Trending</CardTitle>
+                            <CardDescription className="text-gray-400">
+                              Faster patient stabilization with optimized treatment protocols
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <ResponsiveContainer width="100%" height={300}>
+                              <LineChart data={reportData.trending_data || []}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                <XAxis 
+                                  dataKey="week" 
+                                  stroke="#9CA3AF"
+                                  label={{ value: 'Week', position: 'insideBottom', offset: -5, fill: '#9CA3AF' }}
+                                />
+                                <YAxis 
+                                  stroke="#9CA3AF"
+                                  label={{ value: 'Hours', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }}
+                                />
+                                <Tooltip 
+                                  contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
+                                  labelStyle={{ color: '#F3F4F6' }}
+                                  formatter={(value: any) => [`${value.toFixed(1)}h`, '']}
+                                />
+                                <Legend />
+                                <Line 
+                                  type="monotone" 
+                                  dataKey="time_to_stability.p25" 
+                                  stroke="#06B6D4" 
+                                  strokeWidth={1}
+                                  strokeDasharray="3 3"
+                                  dot={false}
+                                  name="p25"
+                                />
+                                <Line 
+                                  type="monotone" 
+                                  dataKey="time_to_stability.mean" 
+                                  stroke="#06B6D4" 
+                                  strokeWidth={3}
+                                  name="Time to Stability"
+                                />
+                                <Line 
+                                  type="monotone" 
+                                  dataKey="time_to_stability.p75" 
+                                  stroke="#06B6D4" 
+                                  strokeWidth={1}
+                                  strokeDasharray="3 3"
+                                  dot={false}
+                                  name="p75"
+                                />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </CardContent>
+                        </Card>
+
+                        {/* Bundle Compliance Trend */}
+                        <Card className="bg-dark border-gray-700">
+                          <CardHeader>
+                            <CardTitle className="text-white text-lg">Sepsis Bundle Compliance</CardTitle>
+                            <CardDescription className="text-gray-400">
+                              Improved adherence to evidence-based sepsis care protocols
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <ResponsiveContainer width="100%" height={300}>
+                              <LineChart data={reportData.trending_data || []}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                <XAxis 
+                                  dataKey="week" 
+                                  stroke="#9CA3AF"
+                                  label={{ value: 'Week', position: 'insideBottom', offset: -5, fill: '#9CA3AF' }}
+                                />
+                                <YAxis 
+                                  stroke="#9CA3AF"
+                                  domain={[50, 100]}
+                                  tickFormatter={(value) => `${value}%`}
+                                />
+                                <Tooltip 
+                                  contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
+                                  labelStyle={{ color: '#F3F4F6' }}
+                                  formatter={(value: any) => [`${value.toFixed(1)}%`, '']}
+                                />
+                                <Legend />
+                                <Line 
+                                  type="monotone" 
+                                  dataKey="bundle_compliance.mean" 
+                                  stroke="#3B82F6" 
+                                  strokeWidth={3}
+                                  name="Bundle Compliance"
+                                />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </CardContent>
+                        </Card>
+
+                        {/* Pathway Adoption */}
+                        {reportData.trending_data && reportData.trending_data.length > 0 && (
+                          <Card className="bg-dark border-gray-700">
+                            <CardHeader>
+                              <CardTitle className="text-white text-lg">AI-Optimized Pathway Adoption</CardTitle>
+                              <CardDescription className="text-gray-400">
+                                Shift from standard protocols to AI-optimized treatment pathways
+                              </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                              <ResponsiveContainer width="100%" height={300}>
+                                <AreaChart data={reportData.trending_data || []}>
+                                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                  <XAxis 
+                                    dataKey="week" 
+                                    stroke="#9CA3AF"
+                                    label={{ value: 'Week', position: 'insideBottom', offset: -5, fill: '#9CA3AF' }}
+                                  />
+                                  <YAxis 
+                                    stroke="#9CA3AF"
+                                    tickFormatter={(value) => `${value}%`}
+                                  />
+                                  <Tooltip 
+                                    contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
+                                    labelStyle={{ color: '#F3F4F6' }}
+                                    formatter={(value: any) => [`${value?.toFixed(1) || 0}%`, '']}
+                                  />
+                                  <Legend />
+                                  <Area 
+                                    type="monotone" 
+                                    dataKey="pathway_distribution.ai_optimized" 
+                                    stackId="1"
+                                    stroke="#8B5CF6" 
+                                    fill="#8B5CF6"
+                                    name="AI Optimized"
+                                  />
+                                  <Area 
+                                    type="monotone" 
+                                    dataKey="pathway_distribution.standard" 
+                                    stackId="1"
+                                    stroke="#3B82F6" 
+                                    fill="#3B82F6"
+                                    name="Standard"
+                                  />
+                                  <Area 
+                                    type="monotone" 
+                                    dataKey="pathway_distribution.aggressive" 
+                                    stackId="1"
+                                    stroke="#F59E0B" 
+                                    fill="#F59E0B"
+                                    name="Aggressive"
+                                  />
+                                  <Area 
+                                    type="monotone" 
+                                    dataKey="pathway_distribution.conservative" 
+                                    stackId="1"
+                                    stroke="#10B981" 
+                                    fill="#10B981"
+                                    name="Conservative"
+                                  />
+                                </AreaChart>
+                              </ResponsiveContainer>
+                            </CardContent>
+                          </Card>
+                        )}
+
+                        {/* Summary Stats */}
+                        <Card className="bg-dark border-gray-700">
+                          <CardHeader>
+                            <CardTitle className="text-white text-lg">Summary Statistics</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                              <div>
+                                <p className="text-xs text-gray-400 mb-1">Total Patients</p>
+                                <p className="text-2xl font-bold text-white">
+                                  {reportData.executive_summary?.total_patients || 0}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-400 mb-1">Weeks Tracked</p>
+                                <p className="text-2xl font-bold text-white">
+                                  {reportData.executive_summary?.weeks_tracked || 0}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-400 mb-1">Baseline Survival</p>
+                                <p className="text-2xl font-bold text-white">
+                                  {((reportData.baseline?.survival_prob || 0) * 100).toFixed(1)}%
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-400 mb-1">Current Survival</p>
+                                <p className="text-2xl font-bold text-green-400">
+                                  {((reportData.current?.survival_prob || 0) * 100).toFixed(1)}%
+                                </p>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    ) : (
+                      <div className="text-center py-12">
+                        <TrendingUp className="w-16 h-16 mx-auto mb-4 text-gray-600" />
+                        <p className="text-gray-400 mb-2">No report data available</p>
+                        <p className="text-sm text-gray-500">Unable to load trending outcomes data</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1852,6 +2209,11 @@ function App() {
                                   const vasopressorType = (pathway.treatment_details?.vasopressor?.type || '').toLowerCase()
                                   const hasAntibiotics = abxCoverage !== 'none' && abxCoverage !== ''
                                   const hasVasopressors = vasopressorType !== 'none' && vasopressorType !== ''
+                                  const samples = pathway.samples || monteCarloPathways.simulation_params?.samples_per_pathway || 500
+                                  
+                                  const optimalPathway = monteCarloPathways.top_3_pathways[0]
+                                  const survivalDelta = idx > 0 ? (survivalProb - (optimalPathway.expected_outcomes?.survival_prob?.mean ?? 0)) * 100 : 0
+                                  const timeDelta = idx > 0 ? (timeToStability - (optimalPathway.expected_outcomes?.time_to_stability_hr?.mean ?? 0)) : 0
                                   
                                   return (
                                     <button
@@ -1872,11 +2234,21 @@ function App() {
                                       }`}
                                     >
                                       <div className="flex items-center justify-between mb-2">
-                                        <div className="text-xs font-semibold text-white">
-                                          {idx === 0 ? '🏆 Optimal' : `Option ${idx + 1}`}
+                                        <div className="flex items-center gap-1">
+                                          <div className="text-xs font-semibold text-white">
+                                            {idx === 0 ? '🏆 Optimal' : `Option ${idx + 1}`}
+                                          </div>
+                                          <div className="text-[10px] text-gray-500">(n={samples})</div>
                                         </div>
-                                        <div className="text-lg font-bold text-cyan-400">
-                                          {Math.round(survivalProb * 100)}%
+                                        <div className="flex items-center gap-1">
+                                          <div className="text-lg font-bold text-cyan-400">
+                                            {Math.round(survivalProb * 100)}%
+                                          </div>
+                                          {idx > 0 && Math.abs(survivalDelta) > 0.5 && (
+                                            <div className={`text-[10px] px-1 rounded ${survivalDelta < 0 ? 'bg-red-900/50 text-red-400' : 'bg-green-900/50 text-green-400'}`}>
+                                              {survivalDelta > 0 ? '+' : ''}{survivalDelta.toFixed(1)}%
+                                            </div>
+                                          )}
                                         </div>
                                       </div>
                                       <div className="text-xs text-gray-400 mb-1">
@@ -1887,8 +2259,13 @@ function App() {
                                         {' • '}
                                         {hasVasopressors ? '✓ Pressors' : '○ No pressors'}
                                       </div>
-                                      <div className="text-xs text-gray-500 mt-1">
-                                        Stability: {timeToStability > 0 ? timeToStability.toFixed(1) : 'N/A'}h
+                                      <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
+                                        <span>Stability: {timeToStability > 0 ? timeToStability.toFixed(1) : 'N/A'}h</span>
+                                        {idx > 0 && Math.abs(timeDelta) > 0.5 && (
+                                          <span className={`text-[10px] px-1 rounded ${timeDelta > 0 ? 'bg-red-900/50 text-red-400' : 'bg-green-900/50 text-green-400'}`}>
+                                            {timeDelta > 0 ? '+' : ''}{timeDelta.toFixed(1)}h
+                                          </span>
+                                        )}
                                       </div>
                                     </button>
                                   )
@@ -2037,12 +2414,15 @@ function App() {
 
                                 <div>
                                   <div className="flex justify-between text-xs mb-1">
-                                    <span className="text-gray-400">Time to Stability (hours)</span>
+                                    <span className="text-gray-400">Time to Stability (hours) - Inverted: Shorter = Better</span>
                                   </div>
                                   <div className="space-y-1">
                                     {(monteCarloPathways.top_3_pathways || []).map((pathway: any, idx: number) => {
                                       const maxTime = Math.max(...(monteCarloPathways.top_3_pathways || []).map((p: any) => p.expected_outcomes?.time_to_stability_hr?.mean || 0))
                                       const time = pathway.expected_outcomes?.time_to_stability_hr?.mean || 0
+                                      const optimalTime = monteCarloPathways.top_3_pathways?.[0]?.expected_outcomes?.time_to_stability_hr?.mean || 0
+                                      const timeDelta = idx > 0 ? (time - optimalTime).toFixed(1) : null
+                                      const invertedPct = maxTime > 0 ? 100 - ((time / maxTime) * 100) : 0
                                       return (
                                         <div key={idx} className="flex items-center space-x-2">
                                           <div className="text-xs text-gray-500 w-16">
@@ -2053,11 +2433,12 @@ function App() {
                                               className={`h-full ${
                                                 idx === 0 ? 'bg-green-500' : idx === 1 ? 'bg-cyan-500' : 'bg-blue-500'
                                               }`}
-                                              style={{ width: `${maxTime > 0 ? (time / maxTime) * 100 : 0}%` }}
+                                              style={{ width: `${invertedPct}%` }}
                                             />
                                           </div>
-                                          <div className="text-xs text-white w-12 text-right">
-                                            {time.toFixed(1)}h
+                                          <div className="text-xs text-white w-16 text-right flex items-center justify-end space-x-1">
+                                            <span>{time.toFixed(1)}h</span>
+                                            {timeDelta && <span className="text-red-400 text-[10px]">+{timeDelta}h</span>}
                                           </div>
                                         </div>
                                       )
@@ -2097,8 +2478,23 @@ function App() {
                               </div>
                             </div>
 
-                            <div className="text-xs text-gray-500 italic">
-                              Based on {monteCarloPathways.simulation_params?.samples_per_pathway || monteCarloPathways.top_3_pathways?.[0]?.samples || 100} Monte Carlo simulations per pathway
+                            <div className="space-y-2">
+                              <div className="text-xs text-gray-500 italic">
+                                Based on {monteCarloPathways.simulation_params?.samples_per_pathway || monteCarloPathways.top_3_pathways?.[0]?.samples || 100} Monte Carlo simulations per pathway
+                              </div>
+                              {monteCarloPathways.top_3_pathways?.[0] && (
+                                <div className="p-3 bg-purple-950/30 border border-purple-600/40 rounded">
+                                  <div className="text-xs text-purple-300 font-semibold mb-2">Composite Score Weighting</div>
+                                  <div className="text-xs text-gray-300 space-y-1">
+                                    <div>• Survival Probability: <span className="text-white font-semibold">60%</span> weight</div>
+                                    <div>• Time to Stability: <span className="text-white font-semibold">25%</span> weight (inverted: faster = better)</div>
+                                    <div>• Organ Preservation: <span className="text-white font-semibold">15%</span> weight</div>
+                                  </div>
+                                  <div className="text-xs text-gray-400 mt-2 italic">
+                                    Optimal pathway selected based on highest composite score across all metrics
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </div>
                         ) : (

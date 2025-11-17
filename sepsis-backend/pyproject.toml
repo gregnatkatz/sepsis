@@ -15,6 +15,8 @@ requests = "^2.32.5"
 agentlightning = "^0.2.2"
 httpx = "^0.28.1"
 numpy = "^2.3.5"
+sqlalchemy = "^2.0.44"
+aiosqlite = "^0.21.0"
 
 
 [build-system]

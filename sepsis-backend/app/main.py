@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -14,15 +14,32 @@ from pathlib import Path
 import websockets
 import base64
 import sys
+from sqlalchemy import select, func
+from sqlalchemy.ext.asyncio import AsyncSession
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from mock_patients import MOCK_PATIENTS
 from app.agui import create_agui_session, handle_agui_websocket
 from app.llm_client import get_llm_client, ModelType
+from app.database import (
+    get_db, init_db, DimPatient, FactVitals, FactLabs, 
+    FactInterventions, FactOutcomes, FactEvalResults, EvaluationRun
+)
+from app.evaluation_agent import (
+    run_evaluation_for_patient, run_batch_evaluation, 
+    get_evaluation_run_status, get_cached_evaluation
+)
+from app.reports import get_trending_outcomes, get_pathway_adoption
+from app.synthetic_outcomes import generate_synthetic_outcomes, generate_pathway_adoption as generate_synthetic_pathway_adoption
 
 load_dotenv()
 
 app = FastAPI()
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database on startup"""
+    await init_db()
 
 app.add_middleware(
     CORSMiddleware,
@@ -43,6 +60,16 @@ client = AzureOpenAI(
     azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
 )
 
+def get_llm(model_override: Optional[str] = None) -> Any:
+    """Get LLM client with optional model override from query param"""
+    if model_override:
+        try:
+            model_type = ModelType(model_override)
+            return get_llm_client(model_type)
+        except ValueError:
+            pass  # Fall back to default
+    return get_llm_client()
+
 class ChatRequest(BaseModel):
     message: str
     patient_id: Optional[str] = None
@@ -55,15 +82,101 @@ class PatientQuery(BaseModel):
 async def healthz():
     return {"status": "ok"}
 
+async def get_patient_from_db(patient_id: str, db: AsyncSession) -> Optional[Dict]:
+    """Helper to get patient data from database"""
+    result = await db.execute(
+        select(DimPatient).where(DimPatient.id == patient_id)
+    )
+    patient = result.scalar_one_or_none()
+    if not patient:
+        return None
+    
+    vitals_result = await db.execute(
+        select(FactVitals)
+        .where(FactVitals.patient_id == patient_id)
+        .order_by(FactVitals.timestamp.desc())
+        .limit(10)
+    )
+    vitals_rows = vitals_result.scalars().all()
+    
+    labs_result = await db.execute(
+        select(FactLabs)
+        .where(FactLabs.patient_id == patient_id)
+        .order_by(FactLabs.timestamp.desc())
+        .limit(10)
+    )
+    labs_rows = labs_result.scalars().all()
+    
+    vitals_dict = {}
+    for v in vitals_rows:
+        vitals_dict[v.vital_name] = v.value
+    
+    labs_dict = {}
+    for l in labs_rows:
+        labs_dict[l.lab_name] = l.value
+    
+    if "bp_systolic" in vitals_dict and "bp_diastolic" in vitals_dict:
+        vitals_dict["blood_pressure"] = f"{int(vitals_dict['bp_systolic'])}/{int(vitals_dict['bp_diastolic'])}"
+    
+    return {
+        "id": patient.id,
+        "mrn": patient.mrn,
+        "name": patient.name,
+        "age": patient.age,
+        "sex": patient.sex,
+        "room": patient.room,
+        "risk_level": patient.risk_level,
+        "risk_score": patient.risk_score,
+        "cohort_tags": json.loads(patient.cohort_tags) if patient.cohort_tags else [],
+        "vitals": {
+            "current": {
+                "heart_rate": vitals_dict.get("hr", 0),
+                "blood_pressure": vitals_dict.get("blood_pressure", "0/0"),
+                "respiratory_rate": vitals_dict.get("rr", 0),
+                "temperature": vitals_dict.get("temp", 0),
+                "spo2": vitals_dict.get("spo2", 0)
+            }
+        },
+        "labs": {
+            "current": {
+                "wbc": labs_dict.get("wbc", 0),
+                "lactate": labs_dict.get("lactate", 0),
+                "creatinine": labs_dict.get("creatinine", 0),
+                "bilirubin": labs_dict.get("bilirubin", 0),
+                "platelets": labs_dict.get("platelets", 0)
+            }
+        }
+    }
+
 @app.get("/api/patients")
-async def get_patients():
-    return {"patients": MOCK_PATIENTS}
+async def get_patients(db: AsyncSession = Depends(get_db)):
+    """Get all patients from database, fallback to MOCK_PATIENTS if empty"""
+    result = await db.execute(select(DimPatient))
+    patients = result.scalars().all()
+    
+    if not patients:
+        return {"patients": MOCK_PATIENTS}
+    
+    patient_list = []
+    for p in patients:
+        patient_dict = await get_patient_from_db(p.id, db)
+        if patient_dict:
+            patient_list.append(patient_dict)
+    
+    return {"patients": patient_list}
 
 @app.get("/api/patients/{patient_id}")
-async def get_patient(patient_id: str):
-    patient = next((p for p in MOCK_PATIENTS if p["id"] == patient_id), None)
+async def get_patient(patient_id: str, db: AsyncSession = Depends(get_db)):
+    """Get single patient from database, fallback to MOCK_PATIENTS if not found"""
+    patient = await get_patient_from_db(patient_id, db)
+    
+    if not patient:
+        # Fallback to MOCK_PATIENTS
+        patient = next((p for p in MOCK_PATIENTS if p["id"] == patient_id), None)
+    
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
+    
     return patient
 
 def calculate_sirs_criteria(patient: Dict) -> Dict:
@@ -1029,7 +1142,7 @@ async def monte_carlo_what_if(patient_id: str, params: Dict[str, Any] = None):
     
     if params is None:
         params = {}
-    samples = params.get("samples", 100)
+    samples = params.get("samples", 500)  # Default to 500 for high-fidelity results
     seed = params.get("seed", None)
     
     try:
@@ -1238,6 +1351,74 @@ async def get_rl_scenarios(limit: int = 100, offset: int = 0, risk_level: Option
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to load scenarios: {str(e)}")
+
+@app.post("/api/evaluation/run")
+async def run_evaluation(
+    patient_ids: Optional[List[str]] = None,
+    samples: int = 500,
+    seed: Optional[int] = None,
+    use_cache: bool = True,
+    db: AsyncSession = Depends(get_db)
+):
+    """Run batch Monte Carlo evaluation across patients with caching"""
+    try:
+        result = await run_batch_evaluation(patient_ids, samples, seed, db, use_cache)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Evaluation failed: {str(e)}")
+
+@app.get("/api/evaluation/status/{run_id}")
+async def evaluation_status(run_id: int, db: AsyncSession = Depends(get_db)):
+    """Get status of an evaluation run"""
+    result = await get_evaluation_run_status(run_id, db)
+    if "error" in result:
+        raise HTTPException(status_code=404, detail=result["error"])
+    return result
+
+@app.get("/api/evaluation/cached/{patient_id}")
+async def get_cached_eval(
+    patient_id: str,
+    samples: int = 500,
+    seed: Optional[int] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get cached evaluation result for a patient"""
+    result = await get_cached_evaluation(patient_id, samples, seed, db)
+    if not result:
+        raise HTTPException(status_code=404, detail="No cached evaluation found")
+    return result
+
+@app.get("/api/reports/outcomes")
+async def get_outcomes_report(
+    window: str = "weekly",
+    risk_level: Optional[str] = None,
+    use_synthetic: bool = True,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get trending outcomes data for Report tab (uses synthetic data by default for demo)"""
+    if use_synthetic:
+        weeks = 12 if window == "weekly" else 6
+        result = generate_synthetic_outcomes(weeks=weeks)
+        return result
+    else:
+        cohort_filter = {"risk_level": risk_level} if risk_level else None
+        result = await get_trending_outcomes(window, cohort_filter, db)
+        return result
+
+@app.get("/api/reports/pathway-adoption")
+async def get_pathway_report(
+    window: str = "weekly",
+    use_synthetic: bool = True,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get pathway adoption trends over time (uses synthetic data by default for demo)"""
+    if use_synthetic:
+        weeks = 12 if window == "weekly" else 6
+        result = generate_synthetic_pathway_adoption(weeks=weeks)
+        return result
+    else:
+        result = await get_pathway_adoption(window, db)
+        return result
 
 @app.get("/api/patients/{patient_id}/early-warning")
 async def get_early_warning(patient_id: str):
