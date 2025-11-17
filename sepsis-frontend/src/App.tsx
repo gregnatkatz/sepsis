@@ -111,6 +111,9 @@ function App() {
   const [loadingWhatIf, setLoadingWhatIf] = useState(false)
   const [rlResults, setRlResults] = useState<any>(null)
   const [loadingRlResults, setLoadingRlResults] = useState(false)
+  const [monteCarloPathways, setMonteCarloPathways] = useState<any>(null)
+  const [selectedPathway, setSelectedPathway] = useState<number>(0)
+  const [loadingMonteCarl, setLoadingMonteCarlo] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
@@ -479,9 +482,12 @@ function App() {
     setSepsisBundle(null)
     setEarlyWarning(null)
     setWhatIfPrediction(null)
+    setMonteCarloPathways(null)
+    setSelectedPathway(0)
     setLoadingHistory(true)
     setLoadingAnalysis(true)
     setLoadingGameChangers(true)
+    setLoadingMonteCarlo(true)
 
     try {
       const historyResponse = await fetch(`${API_URL}/api/patients/${patient.id}/history`, {
@@ -530,6 +536,29 @@ function App() {
     } catch (error) {
       console.error('Error fetching game-changing features:', error)
       setLoadingGameChangers(false)
+    }
+
+    try {
+      const monteCarloRes = await fetch(`${API_URL}/api/patients/${patient.id}/what-if/monte-carlo`, {
+        method: 'POST',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ samples: 100 })
+      })
+      const monteCarloData = await monteCarloRes.json()
+      setMonteCarloPathways(monteCarloData)
+      if (monteCarloData.top_3_pathways && monteCarloData.top_3_pathways.length > 0) {
+        const topPathway = monteCarloData.top_3_pathways[0]
+        setWhatIfIntervention({
+          fluids_ml: topPathway.treatment_details?.fluids?.volume_ml || 0,
+          oxygen_increase: 0,
+          antibiotics_given: topPathway.treatment_details?.antibiotics?.coverage !== 'None',
+          vasopressors_started: topPathway.treatment_details?.vasopressor?.type !== 'None'
+        })
+      }
+      setLoadingMonteCarlo(false)
+    } catch (error) {
+      console.error('Error fetching Monte Carlo pathways:', error)
+      setLoadingMonteCarlo(false)
     }
   }
 
@@ -1801,178 +1830,261 @@ function App() {
                     <div className="border-t border-gray-700 pt-4">
                       <div className="flex items-center space-x-2 mb-3">
                         <Beaker className="w-5 h-5 text-cyan-400" />
-                        <h3 className="text-sm font-semibold text-white">What-If Simulator</h3>
+                        <h3 className="text-sm font-semibold text-white">What-If Simulator (Monte Carlo)</h3>
                       </div>
                       <div className="bg-slate-900/70 border border-slate-600 rounded-lg p-4">
-                        <div className="space-y-4">
-                          <div>
-                            <label className="text-xs text-gray-400 mb-2 block">IV Fluids (mL)</label>
-                            <input
-                              type="range"
-                              min="0"
-                              max="4000"
-                              step="500"
-                              value={whatIfIntervention.fluids_ml}
-                              onChange={async (e) => {
-                                const newIntervention = { ...whatIfIntervention, fluids_ml: parseInt(e.target.value) }
-                                setWhatIfIntervention(newIntervention)
-                                setLoadingWhatIf(true)
-                                try {
-                                  const response = await fetch(`${API_URL}/api/patients/${quickViewPatient.id}/what-if`, {
-                                    method: 'POST',
-                                    headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-                                    body: JSON.stringify(newIntervention)
-                                  })
-                                  const data = await response.json()
-                                  setWhatIfPrediction(data)
-                                } catch (error) {
-                                  console.error('Error fetching what-if prediction:', error)
-                                } finally {
-                                  setLoadingWhatIf(false)
-                                }
-                              }}
-                              className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-                            />
-                            <div className="text-xs text-white mt-1">{whatIfIntervention.fluids_ml} mL</div>
+                        {loadingMonteCarlo ? (
+                          <div className="space-y-3">
+                            <Skeleton className="h-16 w-full bg-gray-700 rounded-lg" />
+                            <Skeleton className="h-32 w-full bg-gray-700 rounded-lg" />
                           </div>
-                          
-                          <div>
-                            <label className="text-xs text-gray-400 mb-2 block">Oxygen Increase (L/min)</label>
-                            <input
-                              type="range"
-                              min="0"
-                              max="10"
-                              step="1"
-                              value={whatIfIntervention.oxygen_increase}
-                              onChange={async (e) => {
-                                const newIntervention = { ...whatIfIntervention, oxygen_increase: parseInt(e.target.value) }
-                                setWhatIfIntervention(newIntervention)
-                                setLoadingWhatIf(true)
-                                try {
-                                  const response = await fetch(`${API_URL}/api/patients/${quickViewPatient.id}/what-if`, {
-                                    method: 'POST',
-                                    headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-                                    body: JSON.stringify(newIntervention)
-                                  })
-                                  const data = await response.json()
-                                  setWhatIfPrediction(data)
-                                } catch (error) {
-                                  console.error('Error fetching what-if prediction:', error)
-                                } finally {
-                                  setLoadingWhatIf(false)
-                                }
-                              }}
-                              className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-                            />
-                            <div className="text-xs text-white mt-1">{whatIfIntervention.oxygen_increase} L/min</div>
-                          </div>
-                          
-                          <div className="flex space-x-4">
-                            <label className="flex items-center space-x-2 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={whatIfIntervention.antibiotics_given}
-                                onChange={async (e) => {
-                                  const newIntervention = { ...whatIfIntervention, antibiotics_given: e.target.checked }
-                                  setWhatIfIntervention(newIntervention)
-                                  setLoadingWhatIf(true)
-                                  try {
-                                    const response = await fetch(`${API_URL}/api/patients/${quickViewPatient.id}/what-if`, {
-                                      method: 'POST',
-                                      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-                                      body: JSON.stringify(newIntervention)
-                                    })
-                                    const data = await response.json()
-                                    setWhatIfPrediction(data)
-                                  } catch (error) {
-                                    console.error('Error fetching what-if prediction:', error)
-                                  } finally {
-                                    setLoadingWhatIf(false)
-                                  }
-                                }}
-                                className="w-4 h-4 rounded border-gray-600 bg-gray-700"
-                              />
-                              <span className="text-xs text-white">Antibiotics</span>
-                            </label>
-                            
-                            <label className="flex items-center space-x-2 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={whatIfIntervention.vasopressors_started}
-                                onChange={async (e) => {
-                                  const newIntervention = { ...whatIfIntervention, vasopressors_started: e.target.checked }
-                                  setWhatIfIntervention(newIntervention)
-                                  setLoadingWhatIf(true)
-                                  try {
-                                    const response = await fetch(`${API_URL}/api/patients/${quickViewPatient.id}/what-if`, {
-                                      method: 'POST',
-                                      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-                                      body: JSON.stringify(newIntervention)
-                                    })
-                                    const data = await response.json()
-                                    setWhatIfPrediction(data)
-                                  } catch (error) {
-                                    console.error('Error fetching what-if prediction:', error)
-                                  } finally {
-                                    setLoadingWhatIf(false)
-                                  }
-                                }}
-                                className="w-4 h-4 rounded border-gray-600 bg-gray-700"
-                              />
-                              <span className="text-xs text-white">Vasopressors</span>
-                            </label>
-                          </div>
-                        </div>
-                        
-                        {loadingWhatIf ? (
-                          <div className="mt-4">
-                            <Skeleton className="h-24 w-full bg-gray-700 rounded-lg" />
-                          </div>
-                        ) : whatIfPrediction && (
-                          <div className="mt-4 space-y-3">
-                            <div className="grid grid-cols-2 gap-3">
-                              <div className="p-3 bg-gray-800/50 rounded border border-gray-700">
-                                <div className="text-xs text-gray-400 mb-1">Current Risk</div>
-                                <div className="text-2xl font-bold text-white">
-                                  {whatIfPrediction.current_state?.risk_score || quickViewPatient.risk_score}
-                                </div>
+                        ) : monteCarloPathways && monteCarloPathways.top_3_pathways ? (
+                          <div className="space-y-4">
+                            <div>
+                              <div className="text-xs text-gray-400 mb-2">Top 3 Treatment Pathways</div>
+                              <div className="grid grid-cols-3 gap-2">
+                                {monteCarloPathways.top_3_pathways.map((pathway: any, idx: number) => (
+                                  <button
+                                    key={idx}
+                                    onClick={() => {
+                                      setSelectedPathway(idx)
+                                      setWhatIfIntervention({
+                                        fluids_ml: pathway.treatment_details?.fluids?.volume_ml || 0,
+                                        oxygen_increase: 0,
+                                        antibiotics_given: pathway.treatment_details?.antibiotics?.coverage !== 'None',
+                                        vasopressors_started: pathway.treatment_details?.vasopressor?.type !== 'None'
+                                      })
+                                    }}
+                                    className={`p-3 rounded-lg border-2 transition-all ${
+                                      selectedPathway === idx
+                                        ? 'border-cyan-500 bg-cyan-900/30'
+                                        : 'border-gray-600 bg-gray-800/50 hover:border-gray-500'
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between mb-2">
+                                      <div className="text-xs font-semibold text-white">
+                                        {idx === 0 ? '🏆 Optimal' : `Option ${idx + 1}`}
+                                      </div>
+                                      <div className="text-lg font-bold text-cyan-400">
+                                        {(pathway.outcomes.survival_probability * 100).toFixed(0)}%
+                                      </div>
+                                    </div>
+                                    <div className="text-xs text-gray-400 mb-1">
+                                      {pathway.treatment_details?.fluids?.volume_ml || 0} mL fluids
+                                    </div>
+                                    <div className="text-xs text-gray-400">
+                                      {pathway.treatment_details?.antibiotics?.coverage !== 'None' ? '✓ Antibiotics' : '○ No antibiotics'}
+                                      {' • '}
+                                      {pathway.treatment_details?.vasopressor?.type !== 'None' ? '✓ Pressors' : '○ No pressors'}
+                                    </div>
+                                    <div className="text-xs text-gray-500 mt-1">
+                                      Stability: {pathway.outcomes.time_to_stability_hours?.toFixed(1) || 'N/A'}h
+                                    </div>
+                                  </button>
+                                ))}
                               </div>
-                              <div className="p-3 bg-gray-800/50 rounded border border-gray-700">
-                                <div className="text-xs text-gray-400 mb-1">Predicted Risk</div>
-                                <div className={`text-2xl font-bold ${
-                                  whatIfPrediction.predicted_state?.risk_score < (whatIfPrediction.current_state?.risk_score || quickViewPatient.risk_score)
-                                    ? 'text-green-400' : 'text-amber-400'
-                                }`}>
-                                  {whatIfPrediction.predicted_state?.risk_score || 0}
+                            </div>
+
+                            <div className="border-t border-gray-700 pt-3">
+                              <div className="text-xs text-gray-400 mb-3">Adjust Parameters</div>
+                              <div className="space-y-3">
+                                <div>
+                                  <label className="text-xs text-gray-400 mb-1 block">IV Fluids (mL)</label>
+                                  <input
+                                    type="range"
+                                    min="0"
+                                    max="4000"
+                                    step="500"
+                                    value={whatIfIntervention.fluids_ml}
+                                    onChange={(e) => {
+                                      setWhatIfIntervention({ ...whatIfIntervention, fluids_ml: parseInt(e.target.value) })
+                                    }}
+                                    className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                                  />
+                                  <div className="text-xs text-white mt-1">{whatIfIntervention.fluids_ml} mL</div>
+                                </div>
+                                
+                                <div className="flex space-x-4">
+                                  <label className="flex items-center space-x-2 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={whatIfIntervention.antibiotics_given}
+                                      onChange={(e) => {
+                                        setWhatIfIntervention({ ...whatIfIntervention, antibiotics_given: e.target.checked })
+                                      }}
+                                      className="w-4 h-4 rounded border-gray-600 bg-gray-700"
+                                    />
+                                    <span className="text-xs text-white">Antibiotics</span>
+                                  </label>
+                                  
+                                  <label className="flex items-center space-x-2 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={whatIfIntervention.vasopressors_started}
+                                      onChange={(e) => {
+                                        setWhatIfIntervention({ ...whatIfIntervention, vasopressors_started: e.target.checked })
+                                      }}
+                                      className="w-4 h-4 rounded border-gray-600 bg-gray-700"
+                                    />
+                                    <span className="text-xs text-white">Vasopressors</span>
+                                  </label>
+                                </div>
+
+                                <button
+                                  onClick={async () => {
+                                    setLoadingWhatIf(true)
+                                    try {
+                                      const response = await fetch(`${API_URL}/api/patients/${quickViewPatient.id}/what-if/evaluate`, {
+                                        method: 'POST',
+                                        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                          fluids_ml: whatIfIntervention.fluids_ml,
+                                          antibiotics: whatIfIntervention.antibiotics_given,
+                                          vasopressors: whatIfIntervention.vasopressors_started,
+                                          samples: 30
+                                        })
+                                      })
+                                      const data = await response.json()
+                                      setWhatIfPrediction(data)
+                                    } catch (error) {
+                                      console.error('Error evaluating custom parameters:', error)
+                                    } finally {
+                                      setLoadingWhatIf(false)
+                                    }
+                                  }}
+                                  className="w-full px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-medium rounded-lg transition-colors"
+                                >
+                                  Preview with my changes
+                                </button>
+
+                                {loadingWhatIf && (
+                                  <div className="text-xs text-gray-400 text-center">
+                                    Running simulation...
+                                  </div>
+                                )}
+
+                                {whatIfPrediction && (
+                                  <div className="p-3 bg-gray-800/50 rounded border border-gray-700">
+                                    <div className="text-xs text-gray-400 mb-2">Custom Preview Results</div>
+                                    <div className="grid grid-cols-3 gap-2">
+                                      <div>
+                                        <div className="text-xs text-gray-500">Survival</div>
+                                        <div className="text-sm font-bold text-green-400">
+                                          {(whatIfPrediction.survival_probability * 100).toFixed(0)}%
+                                        </div>
+                                      </div>
+                                      <div>
+                                        <div className="text-xs text-gray-500">Stability</div>
+                                        <div className="text-sm font-bold text-cyan-400">
+                                          {whatIfPrediction.time_to_stability_hours?.toFixed(1) || 'N/A'}h
+                                        </div>
+                                      </div>
+                                      <div>
+                                        <div className="text-xs text-gray-500">Organ Score</div>
+                                        <div className="text-sm font-bold text-blue-400">
+                                          {(whatIfPrediction.organ_preservation_score * 100).toFixed(0)}%
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="border-t border-gray-700 pt-3">
+                              <div className="text-xs text-gray-400 mb-3">Outcome Comparison</div>
+                              <div className="space-y-3">
+                                <div>
+                                  <div className="flex justify-between text-xs mb-1">
+                                    <span className="text-gray-400">Survival Probability</span>
+                                  </div>
+                                  <div className="space-y-1">
+                                    {monteCarloPathways.top_3_pathways.map((pathway: any, idx: number) => (
+                                      <div key={idx} className="flex items-center space-x-2">
+                                        <div className="text-xs text-gray-500 w-16">
+                                          {idx === 0 ? 'Optimal' : `Option ${idx + 1}`}
+                                        </div>
+                                        <div className="flex-1 bg-gray-800 rounded-full h-4 overflow-hidden">
+                                          <div
+                                            className={`h-full ${
+                                              idx === 0 ? 'bg-green-500' : idx === 1 ? 'bg-cyan-500' : 'bg-blue-500'
+                                            }`}
+                                            style={{ width: `${pathway.outcomes.survival_probability * 100}%` }}
+                                          />
+                                        </div>
+                                        <div className="text-xs text-white w-12 text-right">
+                                          {(pathway.outcomes.survival_probability * 100).toFixed(0)}%
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <div className="flex justify-between text-xs mb-1">
+                                    <span className="text-gray-400">Time to Stability (hours)</span>
+                                  </div>
+                                  <div className="space-y-1">
+                                    {monteCarloPathways.top_3_pathways.map((pathway: any, idx: number) => {
+                                      const maxTime = Math.max(...monteCarloPathways.top_3_pathways.map((p: any) => p.outcomes.time_to_stability_hours || 0))
+                                      const time = pathway.outcomes.time_to_stability_hours || 0
+                                      return (
+                                        <div key={idx} className="flex items-center space-x-2">
+                                          <div className="text-xs text-gray-500 w-16">
+                                            {idx === 0 ? 'Optimal' : `Option ${idx + 1}`}
+                                          </div>
+                                          <div className="flex-1 bg-gray-800 rounded-full h-4 overflow-hidden">
+                                            <div
+                                              className={`h-full ${
+                                                idx === 0 ? 'bg-green-500' : idx === 1 ? 'bg-cyan-500' : 'bg-blue-500'
+                                              }`}
+                                              style={{ width: `${maxTime > 0 ? (time / maxTime) * 100 : 0}%` }}
+                                            />
+                                          </div>
+                                          <div className="text-xs text-white w-12 text-right">
+                                            {time.toFixed(1)}h
+                                          </div>
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <div className="flex justify-between text-xs mb-1">
+                                    <span className="text-gray-400">Organ Preservation Score</span>
+                                  </div>
+                                  <div className="space-y-1">
+                                    {monteCarloPathways.top_3_pathways.map((pathway: any, idx: number) => (
+                                      <div key={idx} className="flex items-center space-x-2">
+                                        <div className="text-xs text-gray-500 w-16">
+                                          {idx === 0 ? 'Optimal' : `Option ${idx + 1}`}
+                                        </div>
+                                        <div className="flex-1 bg-gray-800 rounded-full h-4 overflow-hidden">
+                                          <div
+                                            className={`h-full ${
+                                              idx === 0 ? 'bg-green-500' : idx === 1 ? 'bg-cyan-500' : 'bg-blue-500'
+                                            }`}
+                                            style={{ width: `${pathway.outcomes.organ_preservation_score * 100}%` }}
+                                          />
+                                        </div>
+                                        <div className="text-xs text-white w-12 text-right">
+                                          {(pathway.outcomes.organ_preservation_score * 100).toFixed(0)}%
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
                                 </div>
                               </div>
                             </div>
-                            
-                            {whatIfPrediction.risk_reduction > 0 && (
-                              <div className="p-2 bg-green-950/30 border border-green-600/40 rounded text-xs text-green-300">
-                                ✓ Expected risk reduction: {whatIfPrediction.risk_reduction} points
-                              </div>
-                            )}
-                            
-                            {whatIfPrediction.effects && whatIfPrediction.effects.length > 0 && (
-                              <div className="space-y-1">
-                                {whatIfPrediction.effects.map((effect: string, idx: number) => (
-                                  <div key={idx} className="text-xs text-gray-300">• {effect}</div>
-                                ))}
-                              </div>
-                            )}
-                            
-                            {whatIfPrediction.clinical_reasoning && (
-                              <div className="text-xs text-gray-400 italic mt-2">
-                                {whatIfPrediction.clinical_reasoning}
-                              </div>
-                            )}
-                            
-                            {whatIfPrediction.timeframe && (
-                              <div className="text-xs text-gray-400">
-                                Expected timeframe: {whatIfPrediction.timeframe}
-                              </div>
-                            )}
+
+                            <div className="text-xs text-gray-500 italic">
+                              Based on {monteCarloPathways.metadata?.samples_per_candidate || 100} Monte Carlo simulations per pathway
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-xs text-gray-400 text-center py-4">
+                            No Monte Carlo pathways available
                           </div>
                         )}
                       </div>
