@@ -1125,6 +1125,48 @@ Explain why this pathway is appropriate for this patient's condition."""
     except Exception as e:
         return f"This pathway balances {pathway['candidate_name'].lower()} approach with expected outcomes."
 
+@app.get("/api/rl/results")
+async def get_rl_results():
+    """Get RL batch evaluation results with learning curves and insights"""
+    results_path = Path(__file__).parent / "data" / "rl_batch_results.json"
+    
+    if not results_path.exists():
+        raise HTTPException(status_code=404, detail="RL results not found. Run batch evaluation first.")
+    
+    try:
+        with open(results_path, 'r') as f:
+            results = json.load(f)
+        return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load RL results: {str(e)}")
+
+@app.get("/api/rl/scenarios")
+async def get_rl_scenarios(limit: int = 100, offset: int = 0, risk_level: Optional[str] = None):
+    """Get paginated RL scenario results from comprehensive table"""
+    csv_path = Path(__file__).parent / "data" / "comprehensive_table.csv"
+    
+    if not csv_path.exists():
+        raise HTTPException(status_code=404, detail="Scenario data not found. Run batch evaluation first.")
+    
+    try:
+        import pandas as pd
+        df = pd.read_csv(csv_path)
+        
+        if risk_level:
+            df = df[df['risk_level'] == risk_level.upper()]
+        
+        total = len(df)
+        df_page = df.iloc[offset:offset+limit]
+        
+        return {
+            "total": total,
+            "offset": offset,
+            "limit": limit,
+            "scenarios": df_page.to_dict(orient='records')
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load scenarios: {str(e)}")
+
 @app.get("/api/patients/{patient_id}/early-warning")
 async def get_early_warning(patient_id: str):
     """Multi-Agent Early Warning System: 6 specialized agents analyzing patient deterioration"""
