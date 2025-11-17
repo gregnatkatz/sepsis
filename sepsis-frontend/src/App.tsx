@@ -2414,12 +2414,15 @@ function App() {
 
                                 <div>
                                   <div className="flex justify-between text-xs mb-1">
-                                    <span className="text-gray-400">Time to Stability (hours)</span>
+                                    <span className="text-gray-400">Time to Stability (hours) - Inverted: Shorter = Better</span>
                                   </div>
                                   <div className="space-y-1">
                                     {(monteCarloPathways.top_3_pathways || []).map((pathway: any, idx: number) => {
                                       const maxTime = Math.max(...(monteCarloPathways.top_3_pathways || []).map((p: any) => p.expected_outcomes?.time_to_stability_hr?.mean || 0))
                                       const time = pathway.expected_outcomes?.time_to_stability_hr?.mean || 0
+                                      const optimalTime = monteCarloPathways.top_3_pathways?.[0]?.expected_outcomes?.time_to_stability_hr?.mean || 0
+                                      const timeDelta = idx > 0 ? (time - optimalTime).toFixed(1) : null
+                                      const invertedPct = maxTime > 0 ? 100 - ((time / maxTime) * 100) : 0
                                       return (
                                         <div key={idx} className="flex items-center space-x-2">
                                           <div className="text-xs text-gray-500 w-16">
@@ -2430,11 +2433,12 @@ function App() {
                                               className={`h-full ${
                                                 idx === 0 ? 'bg-green-500' : idx === 1 ? 'bg-cyan-500' : 'bg-blue-500'
                                               }`}
-                                              style={{ width: `${maxTime > 0 ? (time / maxTime) * 100 : 0}%` }}
+                                              style={{ width: `${invertedPct}%` }}
                                             />
                                           </div>
-                                          <div className="text-xs text-white w-12 text-right">
-                                            {time.toFixed(1)}h
+                                          <div className="text-xs text-white w-16 text-right flex items-center justify-end space-x-1">
+                                            <span>{time.toFixed(1)}h</span>
+                                            {timeDelta && <span className="text-red-400 text-[10px]">+{timeDelta}h</span>}
                                           </div>
                                         </div>
                                       )
@@ -2474,8 +2478,23 @@ function App() {
                               </div>
                             </div>
 
-                            <div className="text-xs text-gray-500 italic">
-                              Based on {monteCarloPathways.simulation_params?.samples_per_pathway || monteCarloPathways.top_3_pathways?.[0]?.samples || 100} Monte Carlo simulations per pathway
+                            <div className="space-y-2">
+                              <div className="text-xs text-gray-500 italic">
+                                Based on {monteCarloPathways.simulation_params?.samples_per_pathway || monteCarloPathways.top_3_pathways?.[0]?.samples || 100} Monte Carlo simulations per pathway
+                              </div>
+                              {monteCarloPathways.top_3_pathways?.[0] && (
+                                <div className="p-3 bg-purple-950/30 border border-purple-600/40 rounded">
+                                  <div className="text-xs text-purple-300 font-semibold mb-2">Composite Score Weighting</div>
+                                  <div className="text-xs text-gray-300 space-y-1">
+                                    <div>• Survival Probability: <span className="text-white font-semibold">60%</span> weight</div>
+                                    <div>• Time to Stability: <span className="text-white font-semibold">25%</span> weight (inverted: faster = better)</div>
+                                    <div>• Organ Preservation: <span className="text-white font-semibold">15%</span> weight</div>
+                                  </div>
+                                  <div className="text-xs text-gray-400 mt-2 italic">
+                                    Optimal pathway selected based on highest composite score across all metrics
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </div>
                         ) : (
