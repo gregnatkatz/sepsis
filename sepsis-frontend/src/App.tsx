@@ -1847,11 +1847,21 @@ function App() {
                               <div className="grid grid-cols-3 gap-2">
                                 {(monteCarloPathways.top_3_pathways || []).map((pathway: any, idx: number) => {
                                   const survivalProb = pathway.expected_outcomes?.survival_prob?.mean ?? 0
+                                  const survivalP25 = pathway.expected_outcomes?.survival_prob?.p25 ?? null
+                                  const survivalP75 = pathway.expected_outcomes?.survival_prob?.p75 ?? null
                                   const timeToStability = pathway.expected_outcomes?.time_to_stability_hr?.mean ?? 0
+                                  const timeP25 = pathway.expected_outcomes?.time_to_stability_hr?.p25 ?? null
+                                  const timeP75 = pathway.expected_outcomes?.time_to_stability_hr?.p75 ?? null
+                                  const organScore = pathway.expected_outcomes?.organ_preservation_score?.mean ?? 0
                                   const abxCoverage = (pathway.treatment_details?.antibiotics?.coverage || '').toLowerCase()
                                   const vasopressorType = (pathway.treatment_details?.vasopressor?.type || '').toLowerCase()
                                   const hasAntibiotics = abxCoverage !== 'none' && abxCoverage !== ''
                                   const hasVasopressors = vasopressorType !== 'none' && vasopressorType !== ''
+                                  const samples = pathway.samples || monteCarloPathways.simulation_params?.samples_per_pathway || 500
+                                  
+                                  const optimalPathway = monteCarloPathways.top_3_pathways[0]
+                                  const survivalDelta = idx > 0 ? (survivalProb - (optimalPathway.expected_outcomes?.survival_prob?.mean ?? 0)) * 100 : 0
+                                  const timeDelta = idx > 0 ? (timeToStability - (optimalPathway.expected_outcomes?.time_to_stability_hr?.mean ?? 0)) : 0
                                   
                                   return (
                                     <button
@@ -1872,11 +1882,21 @@ function App() {
                                       }`}
                                     >
                                       <div className="flex items-center justify-between mb-2">
-                                        <div className="text-xs font-semibold text-white">
-                                          {idx === 0 ? '🏆 Optimal' : `Option ${idx + 1}`}
+                                        <div className="flex items-center gap-1">
+                                          <div className="text-xs font-semibold text-white">
+                                            {idx === 0 ? '🏆 Optimal' : `Option ${idx + 1}`}
+                                          </div>
+                                          <div className="text-[10px] text-gray-500">(n={samples})</div>
                                         </div>
-                                        <div className="text-lg font-bold text-cyan-400">
-                                          {Math.round(survivalProb * 100)}%
+                                        <div className="flex items-center gap-1">
+                                          <div className="text-lg font-bold text-cyan-400">
+                                            {Math.round(survivalProb * 100)}%
+                                          </div>
+                                          {idx > 0 && Math.abs(survivalDelta) > 0.5 && (
+                                            <div className={`text-[10px] px-1 rounded ${survivalDelta < 0 ? 'bg-red-900/50 text-red-400' : 'bg-green-900/50 text-green-400'}`}>
+                                              {survivalDelta > 0 ? '+' : ''}{survivalDelta.toFixed(1)}%
+                                            </div>
+                                          )}
                                         </div>
                                       </div>
                                       <div className="text-xs text-gray-400 mb-1">
@@ -1887,8 +1907,13 @@ function App() {
                                         {' • '}
                                         {hasVasopressors ? '✓ Pressors' : '○ No pressors'}
                                       </div>
-                                      <div className="text-xs text-gray-500 mt-1">
-                                        Stability: {timeToStability > 0 ? timeToStability.toFixed(1) : 'N/A'}h
+                                      <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
+                                        <span>Stability: {timeToStability > 0 ? timeToStability.toFixed(1) : 'N/A'}h</span>
+                                        {idx > 0 && Math.abs(timeDelta) > 0.5 && (
+                                          <span className={`text-[10px] px-1 rounded ${timeDelta > 0 ? 'bg-red-900/50 text-red-400' : 'bg-green-900/50 text-green-400'}`}>
+                                            {timeDelta > 0 ? '+' : ''}{timeDelta.toFixed(1)}h
+                                          </span>
+                                        )}
                                       </div>
                                     </button>
                                   )
