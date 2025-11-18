@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart, Bar, AreaChart, Area } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart, Bar } from 'recharts'
 import { AGUIClient } from './aguiClient'
 
 const API_URL = (import.meta.env.VITE_API_URL && import.meta.env.VITE_API_URL.trim() !== '') 
@@ -89,6 +89,7 @@ function App() {
   const [sortColumn, setSortColumn] = useState<string>('risk_score')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
   const [filterRisk, setFilterRisk] = useState<string>('all')
+  const [filterDataset, setFilterDataset] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [quickViewOpen, setQuickViewOpen] = useState(false)
   const [quickViewPatient, setQuickViewPatient] = useState<Patient | null>(null)
@@ -169,13 +170,13 @@ function App() {
   const fetchReportData = async () => {
     setLoadingReport(true)
     try {
-      const response = await fetch(`${API_URL}/api/reports/outcomes?window=weekly&use_synthetic=true`, {
+      const response = await fetch(`${API_URL}/api/validation-reports`, {
         headers: getAuthHeaders()
       })
       const data = await response.json()
       setReportData(data)
     } catch (error) {
-      console.error('Error fetching report data:', error)
+      console.error('Error fetching validation reports:', error)
     } finally {
       setLoadingReport(false)
     }
@@ -395,6 +396,18 @@ function App() {
       filtered = filtered.filter(p => p.risk_level === filterRisk)
     }
 
+    if (filterDataset !== 'all') {
+      filtered = filtered.filter(p => {
+        const cohortTags = (p as any).cohort_tags || []
+        if (filterDataset === 'kaggle') {
+          return cohortTags.includes('kaggle')
+        } else if (filterDataset === 'synthetic') {
+          return cohortTags.includes('synthetic')
+        }
+        return true
+      })
+    }
+
     if (searchQuery) {
       const query = searchQuery.toLowerCase()
       filtered = filtered.filter(p => 
@@ -410,17 +423,17 @@ function App() {
       let bVal: any = b[sortColumn as keyof Patient]
 
       if (sortColumn === 'heart_rate') {
-        aVal = a.vitals.current.heart_rate
-        bVal = b.vitals.current.heart_rate
+        aVal = a.vitals?.current?.heart_rate ?? 0
+        bVal = b.vitals?.current?.heart_rate ?? 0
       } else if (sortColumn === 'temperature') {
-        aVal = a.vitals.current.temperature
-        bVal = b.vitals.current.temperature
+        aVal = a.vitals?.current?.temperature ?? 0
+        bVal = b.vitals?.current?.temperature ?? 0
       } else if (sortColumn === 'wbc') {
-        aVal = a.labs.current.wbc
-        bVal = b.labs.current.wbc
+        aVal = a.labs?.current?.wbc ?? 0
+        bVal = b.labs?.current?.wbc ?? 0
       } else if (sortColumn === 'lactate') {
-        aVal = a.labs.current.lactate
-        bVal = b.labs.current.lactate
+        aVal = a.labs?.current?.lactate ?? 0
+        bVal = b.labs?.current?.lactate ?? 0
       }
 
       if (typeof aVal === 'string') {
@@ -763,11 +776,11 @@ function App() {
                           <div className="grid grid-cols-2 gap-1 mb-1.5">
                             <div className="bg-dark p-1 rounded border border-gray-700">
                               <p className="text-xs text-gray-500">HR</p>
-                              <p className="text-xs font-semibold text-white">{patient.vitals.current.heart_rate}</p>
+                              <p className="text-xs font-semibold text-white">{patient.vitals?.current?.heart_rate ?? 'N/A'}</p>
                             </div>
                             <div className="bg-dark p-1 rounded border border-gray-700">
                               <p className="text-xs text-gray-500">Temp</p>
-                              <p className="text-xs font-semibold text-white">{patient.vitals.current.temperature}°</p>
+                              <p className="text-xs font-semibold text-white">{patient.vitals?.current?.temperature ? `${patient.vitals.current.temperature}°` : 'N/A'}</p>
                             </div>
                           </div>
                           
@@ -822,6 +835,16 @@ function App() {
                         <option value="HIGH">High</option>
                         <option value="MODERATE">Moderate</option>
                         <option value="LOW">Low</option>
+                      </select>
+                      
+                      <select
+                        value={filterDataset}
+                        onChange={(e) => setFilterDataset(e.target.value)}
+                        className="px-3 py-2 bg-dark border border-gray-600 rounded-md text-white"
+                      >
+                        <option value="all">All Datasets</option>
+                        <option value="synthetic">Synthetic</option>
+                        <option value="kaggle">Kaggle</option>
                       </select>
                     </div>
                   </div>
@@ -1540,10 +1563,10 @@ function App() {
                   <CardHeader>
                     <CardTitle className="flex items-center space-x-2 text-white">
                       <TrendingUp className="w-5 h-5 text-teams-purple" />
-                      <span>AI/RL Impact Report</span>
+                      <span>Model Validation Reports</span>
                     </CardTitle>
                     <CardDescription className="text-gray-400">
-                      Trending outcomes showing how AI and reinforcement learning are improving sepsis care over 12 weeks
+                      Comprehensive validation metrics for sepsis prediction model on Kaggle and Synthetic datasets
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -1553,296 +1576,128 @@ function App() {
                         <Skeleton className="h-64 w-full bg-gray-700" />
                         <Skeleton className="h-64 w-full bg-gray-700" />
                       </div>
-                    ) : reportData ? (
+                    ) : reportData && reportData.kaggle ? (
                       <div className="space-y-6">
-                        {/* Executive Summary */}
+                        {/* Kaggle Dataset Metrics */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                           <Card className="bg-dark border-gray-700">
                             <CardContent className="pt-6">
                               <div className="text-center">
-                                <p className="text-xs text-gray-400 mb-2">Survival Improvement</p>
-                                <p className="text-3xl font-bold text-green-400">
-                                  {reportData.executive_summary?.survival_improvement || '+0%'}
-                                </p>
-                                <p className="text-xs text-gray-500 mt-1">vs baseline</p>
-                              </div>
-                            </CardContent>
-                          </Card>
-                          <Card className="bg-dark border-gray-700">
-                            <CardContent className="pt-6">
-                              <div className="text-center">
-                                <p className="text-xs text-gray-400 mb-2">Time to Stability</p>
-                                <p className="text-3xl font-bold text-cyan-400">
-                                  {reportData.executive_summary?.time_reduction || '−0%'}
-                                </p>
-                                <p className="text-xs text-gray-500 mt-1">reduction</p>
-                              </div>
-                            </CardContent>
-                          </Card>
-                          <Card className="bg-dark border-gray-700">
-                            <CardContent className="pt-6">
-                              <div className="text-center">
-                                <p className="text-xs text-gray-400 mb-2">Bundle Compliance</p>
+                                <p className="text-xs text-gray-400 mb-2">AUROC</p>
                                 <p className="text-3xl font-bold text-blue-400">
-                                  {reportData.executive_summary?.bundle_improvement || '+0%'}
+                                  {(reportData.kaggle.auroc * 100).toFixed(1)}%
                                 </p>
-                                <p className="text-xs text-gray-500 mt-1">improvement</p>
+                                <p className="text-xs text-gray-500 mt-1">Area Under ROC Curve</p>
+                              </div>
+                            </CardContent>
+                          </Card>
+                          <Card className="bg-dark border-gray-700">
+                            <CardContent className="pt-6">
+                              <div className="text-center">
+                                <p className="text-xs text-gray-400 mb-2">AUPRC</p>
+                                <p className="text-3xl font-bold text-cyan-400">
+                                  {(reportData.kaggle.auprc * 100).toFixed(1)}%
+                                </p>
+                                <p className="text-xs text-gray-500 mt-1">Area Under PR Curve</p>
+                              </div>
+                            </CardContent>
+                          </Card>
+                          <Card className="bg-dark border-gray-700">
+                            <CardContent className="pt-6">
+                              <div className="text-center">
+                                <p className="text-xs text-gray-400 mb-2">Dataset Size</p>
+                                <p className="text-3xl font-bold text-green-400">
+                                  {reportData.kaggle.n_patients.toLocaleString()}
+                                </p>
+                                <p className="text-xs text-gray-500 mt-1">{reportData.kaggle.n_sepsis} sepsis ({(reportData.kaggle.prevalence * 100).toFixed(1)}%)</p>
                               </div>
                             </CardContent>
                           </Card>
                         </div>
 
-                        {/* Survival Probability Trend */}
+                        {/* Threshold Analysis Table */}
                         <Card className="bg-dark border-gray-700">
                           <CardHeader>
-                            <CardTitle className="text-white text-lg">Survival Probability Trending</CardTitle>
+                            <CardTitle className="text-white text-lg">Threshold Analysis - Kaggle Dataset</CardTitle>
                             <CardDescription className="text-gray-400">
-                              Patient survival rates improving with AI-guided treatment pathways
+                              Performance metrics at different risk score thresholds (Current: threshold 50, PPV 45.5%)
                             </CardDescription>
                           </CardHeader>
                           <CardContent>
-                            <ResponsiveContainer width="100%" height={300}>
-                              <LineChart data={reportData.trending_data || []}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                                <XAxis 
-                                  dataKey="week" 
-                                  stroke="#9CA3AF"
-                                  label={{ value: 'Week', position: 'insideBottom', offset: -5, fill: '#9CA3AF' }}
-                                />
-                                <YAxis 
-                                  stroke="#9CA3AF"
-                                  domain={[0.6, 1.0]}
-                                  tickFormatter={(value) => `${(value * 100).toFixed(0)}%`}
-                                />
-                                <Tooltip 
-                                  contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
-                                  labelStyle={{ color: '#F3F4F6' }}
-                                  formatter={(value: any) => [`${(value * 100).toFixed(1)}%`, '']}
-                                />
-                                <Legend />
-                                <Line 
-                                  type="monotone" 
-                                  dataKey="survival_prob.p25" 
-                                  stroke="#10B981" 
-                                  strokeWidth={1}
-                                  strokeDasharray="3 3"
-                                  dot={false}
-                                  name="p25"
-                                />
-                                <Line 
-                                  type="monotone" 
-                                  dataKey="survival_prob.mean" 
-                                  stroke="#10B981" 
-                                  strokeWidth={3}
-                                  name="Survival Rate"
-                                />
-                                <Line 
-                                  type="monotone" 
-                                  dataKey="survival_prob.p75" 
-                                  stroke="#10B981" 
-                                  strokeWidth={1}
-                                  strokeDasharray="3 3"
-                                  dot={false}
-                                  name="p75"
-                                />
-                              </LineChart>
-                            </ResponsiveContainer>
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="border-b border-gray-700">
+                                    <th className="text-left py-2 px-3 text-gray-400 font-medium">Threshold</th>
+                                    <th className="text-right py-2 px-3 text-gray-400 font-medium">PPV</th>
+                                    <th className="text-right py-2 px-3 text-gray-400 font-medium">Sensitivity</th>
+                                    <th className="text-right py-2 px-3 text-gray-400 font-medium">Specificity</th>
+                                    <th className="text-right py-2 px-3 text-gray-400 font-medium">F1</th>
+                                    <th className="text-right py-2 px-3 text-gray-400 font-medium">Accuracy</th>
+                                    <th className="text-right py-2 px-3 text-gray-400 font-medium">TP</th>
+                                    <th className="text-right py-2 px-3 text-gray-400 font-medium">FP</th>
+                                    <th className="text-right py-2 px-3 text-gray-400 font-medium">FN</th>
+                                    <th className="text-right py-2 px-3 text-gray-400 font-medium">TN</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {reportData.kaggle.threshold_metrics.map((metric: any) => (
+                                    <tr key={metric.threshold} className={`border-b border-gray-800 ${metric.threshold === reportData.kaggle.optimal_threshold.threshold ? 'bg-purple-950/30' : ''}`}>
+                                      <td className="py-2 px-3 text-white font-semibold">{metric.threshold}</td>
+                                      <td className="text-right py-2 px-3 text-white">{(metric.ppv * 100).toFixed(1)}%</td>
+                                      <td className="text-right py-2 px-3 text-white">{(metric.sensitivity * 100).toFixed(1)}%</td>
+                                      <td className="text-right py-2 px-3 text-white">{(metric.specificity * 100).toFixed(1)}%</td>
+                                      <td className="text-right py-2 px-3 text-white">{(metric.f1 * 100).toFixed(1)}%</td>
+                                      <td className="text-right py-2 px-3 text-white">{(metric.accuracy * 100).toFixed(1)}%</td>
+                                      <td className="text-right py-2 px-3 text-green-400">{metric.tp}</td>
+                                      <td className="text-right py-2 px-3 text-red-400">{metric.fp}</td>
+                                      <td className="text-right py-2 px-3 text-orange-400">{metric.fn}</td>
+                                      <td className="text-right py-2 px-3 text-gray-400">{metric.tn}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                            <div className="mt-4 p-3 bg-purple-950/30 border border-purple-600/40 rounded">
+                              <p className="text-xs text-purple-300 font-semibold mb-1">Optimal Threshold (Max F1): {reportData.kaggle.optimal_threshold.threshold}</p>
+                              <p className="text-xs text-gray-300">
+                                PPV: {(reportData.kaggle.optimal_threshold.ppv * 100).toFixed(1)}%, 
+                                Sensitivity: {(reportData.kaggle.optimal_threshold.sensitivity * 100).toFixed(1)}%, 
+                                F1: {(reportData.kaggle.optimal_threshold.f1 * 100).toFixed(1)}%
+                              </p>
+                            </div>
                           </CardContent>
                         </Card>
 
-                        {/* Time to Stability Trend */}
+                        {/* Confusion Matrix for Current Threshold */}
                         <Card className="bg-dark border-gray-700">
                           <CardHeader>
-                            <CardTitle className="text-white text-lg">Time to Stability Trending</CardTitle>
+                            <CardTitle className="text-white text-lg">Confusion Matrix - Current Threshold (50)</CardTitle>
                             <CardDescription className="text-gray-400">
-                              Faster patient stabilization with optimized treatment protocols
+                              Classification results on {reportData.kaggle.n_patients.toLocaleString()} patients
                             </CardDescription>
                           </CardHeader>
                           <CardContent>
-                            <ResponsiveContainer width="100%" height={300}>
-                              <LineChart data={reportData.trending_data || []}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                                <XAxis 
-                                  dataKey="week" 
-                                  stroke="#9CA3AF"
-                                  label={{ value: 'Week', position: 'insideBottom', offset: -5, fill: '#9CA3AF' }}
-                                />
-                                <YAxis 
-                                  stroke="#9CA3AF"
-                                  label={{ value: 'Hours', angle: -90, position: 'insideLeft', fill: '#9CA3AF' }}
-                                />
-                                <Tooltip 
-                                  contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
-                                  labelStyle={{ color: '#F3F4F6' }}
-                                  formatter={(value: any) => [`${value.toFixed(1)}h`, '']}
-                                />
-                                <Legend />
-                                <Line 
-                                  type="monotone" 
-                                  dataKey="time_to_stability.p25" 
-                                  stroke="#06B6D4" 
-                                  strokeWidth={1}
-                                  strokeDasharray="3 3"
-                                  dot={false}
-                                  name="p25"
-                                />
-                                <Line 
-                                  type="monotone" 
-                                  dataKey="time_to_stability.mean" 
-                                  stroke="#06B6D4" 
-                                  strokeWidth={3}
-                                  name="Time to Stability"
-                                />
-                                <Line 
-                                  type="monotone" 
-                                  dataKey="time_to_stability.p75" 
-                                  stroke="#06B6D4" 
-                                  strokeWidth={1}
-                                  strokeDasharray="3 3"
-                                  dot={false}
-                                  name="p75"
-                                />
-                              </LineChart>
-                            </ResponsiveContainer>
-                          </CardContent>
-                        </Card>
-
-                        {/* Bundle Compliance Trend */}
-                        <Card className="bg-dark border-gray-700">
-                          <CardHeader>
-                            <CardTitle className="text-white text-lg">Sepsis Bundle Compliance</CardTitle>
-                            <CardDescription className="text-gray-400">
-                              Improved adherence to evidence-based sepsis care protocols
-                            </CardDescription>
-                          </CardHeader>
-                          <CardContent>
-                            <ResponsiveContainer width="100%" height={300}>
-                              <LineChart data={reportData.trending_data || []}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                                <XAxis 
-                                  dataKey="week" 
-                                  stroke="#9CA3AF"
-                                  label={{ value: 'Week', position: 'insideBottom', offset: -5, fill: '#9CA3AF' }}
-                                />
-                                <YAxis 
-                                  stroke="#9CA3AF"
-                                  domain={[50, 100]}
-                                  tickFormatter={(value) => `${value}%`}
-                                />
-                                <Tooltip 
-                                  contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
-                                  labelStyle={{ color: '#F3F4F6' }}
-                                  formatter={(value: any) => [`${value.toFixed(1)}%`, '']}
-                                />
-                                <Legend />
-                                <Line 
-                                  type="monotone" 
-                                  dataKey="bundle_compliance.mean" 
-                                  stroke="#3B82F6" 
-                                  strokeWidth={3}
-                                  name="Bundle Compliance"
-                                />
-                              </LineChart>
-                            </ResponsiveContainer>
-                          </CardContent>
-                        </Card>
-
-                        {/* Pathway Adoption */}
-                        {reportData.trending_data && reportData.trending_data.length > 0 && (
-                          <Card className="bg-dark border-gray-700">
-                            <CardHeader>
-                              <CardTitle className="text-white text-lg">AI-Optimized Pathway Adoption</CardTitle>
-                              <CardDescription className="text-gray-400">
-                                Shift from standard protocols to AI-optimized treatment pathways
-                              </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                              <ResponsiveContainer width="100%" height={300}>
-                                <AreaChart data={reportData.trending_data || []}>
-                                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                                  <XAxis 
-                                    dataKey="week" 
-                                    stroke="#9CA3AF"
-                                    label={{ value: 'Week', position: 'insideBottom', offset: -5, fill: '#9CA3AF' }}
-                                  />
-                                  <YAxis 
-                                    stroke="#9CA3AF"
-                                    tickFormatter={(value) => `${value}%`}
-                                  />
-                                  <Tooltip 
-                                    contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
-                                    labelStyle={{ color: '#F3F4F6' }}
-                                    formatter={(value: any) => [`${value?.toFixed(1) || 0}%`, '']}
-                                  />
-                                  <Legend />
-                                  <Area 
-                                    type="monotone" 
-                                    dataKey="pathway_distribution.ai_optimized" 
-                                    stackId="1"
-                                    stroke="#8B5CF6" 
-                                    fill="#8B5CF6"
-                                    name="AI Optimized"
-                                  />
-                                  <Area 
-                                    type="monotone" 
-                                    dataKey="pathway_distribution.standard" 
-                                    stackId="1"
-                                    stroke="#3B82F6" 
-                                    fill="#3B82F6"
-                                    name="Standard"
-                                  />
-                                  <Area 
-                                    type="monotone" 
-                                    dataKey="pathway_distribution.aggressive" 
-                                    stackId="1"
-                                    stroke="#F59E0B" 
-                                    fill="#F59E0B"
-                                    name="Aggressive"
-                                  />
-                                  <Area 
-                                    type="monotone" 
-                                    dataKey="pathway_distribution.conservative" 
-                                    stackId="1"
-                                    stroke="#10B981" 
-                                    fill="#10B981"
-                                    name="Conservative"
-                                  />
-                                </AreaChart>
-                              </ResponsiveContainer>
-                            </CardContent>
-                          </Card>
-                        )}
-
-                        {/* Summary Stats */}
-                        <Card className="bg-dark border-gray-700">
-                          <CardHeader>
-                            <CardTitle className="text-white text-lg">Summary Statistics</CardTitle>
-                          </CardHeader>
-                          <CardContent>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                              <div>
-                                <p className="text-xs text-gray-400 mb-1">Total Patients</p>
-                                <p className="text-2xl font-bold text-white">
-                                  {reportData.executive_summary?.total_patients || 0}
-                                </p>
+                            <div className="grid grid-cols-2 gap-4 max-w-md mx-auto">
+                              <div className="bg-green-950/30 border-2 border-green-600/40 rounded-lg p-4 text-center">
+                                <p className="text-xs text-gray-400 mb-1">True Positives</p>
+                                <p className="text-3xl font-bold text-green-400">{reportData.kaggle.threshold_metrics.find((m: any) => m.threshold === 50)?.tp || 0}</p>
+                                <p className="text-xs text-gray-500 mt-1">Correctly identified sepsis</p>
                               </div>
-                              <div>
-                                <p className="text-xs text-gray-400 mb-1">Weeks Tracked</p>
-                                <p className="text-2xl font-bold text-white">
-                                  {reportData.executive_summary?.weeks_tracked || 0}
-                                </p>
+                              <div className="bg-red-950/30 border-2 border-red-600/40 rounded-lg p-4 text-center">
+                                <p className="text-xs text-gray-400 mb-1">False Positives</p>
+                                <p className="text-3xl font-bold text-red-400">{reportData.kaggle.threshold_metrics.find((m: any) => m.threshold === 50)?.fp || 0}</p>
+                                <p className="text-xs text-gray-500 mt-1">False alarms</p>
                               </div>
-                              <div>
-                                <p className="text-xs text-gray-400 mb-1">Baseline Survival</p>
-                                <p className="text-2xl font-bold text-white">
-                                  {((reportData.baseline?.survival_prob || 0) * 100).toFixed(1)}%
-                                </p>
+                              <div className="bg-orange-950/30 border-2 border-orange-600/40 rounded-lg p-4 text-center">
+                                <p className="text-xs text-gray-400 mb-1">False Negatives</p>
+                                <p className="text-3xl font-bold text-orange-400">{reportData.kaggle.threshold_metrics.find((m: any) => m.threshold === 50)?.fn || 0}</p>
+                                <p className="text-xs text-gray-500 mt-1">Missed sepsis cases</p>
                               </div>
-                              <div>
-                                <p className="text-xs text-gray-400 mb-1">Current Survival</p>
-                                <p className="text-2xl font-bold text-green-400">
-                                  {((reportData.current?.survival_prob || 0) * 100).toFixed(1)}%
-                                </p>
+                              <div className="bg-gray-800/50 border-2 border-gray-600/40 rounded-lg p-4 text-center">
+                                <p className="text-xs text-gray-400 mb-1">True Negatives</p>
+                                <p className="text-3xl font-bold text-gray-300">{reportData.kaggle.threshold_metrics.find((m: any) => m.threshold === 50)?.tn || 0}</p>
+                                <p className="text-xs text-gray-500 mt-1">Correctly ruled out</p>
                               </div>
                             </div>
                           </CardContent>

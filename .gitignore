@@ -6,3 +6,6 @@ sepsis-backend/app/__pycache__/
 *.pyc
 node_modules/
 .DS_Store
+data/Dataset.csv
+data/sepsis.zip
+data/training_setB/
