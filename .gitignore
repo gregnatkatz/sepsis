@@ -9,3 +9,8 @@ node_modules/
 data/Dataset.csv
 data/sepsis.zip
 data/training_setB/
+sepsis-backend/kaggle_features_with_trends.csv
+sepsis-backend/ml_model_full_features.pkl
+sepsis-backend/ml_model_xgb.pkl
+sepsis-backend/sepsis_data.db
+sepsis-backend/calibrator.pkl

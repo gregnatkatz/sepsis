@@ -1,0 +1,100 @@
+Loading features...
+Loaded 40336 patients with 75 features
+
+Features: 73
+Sepsis cases: 2932 (7.3%)
+
+Train: 32268 patients (2346 sepsis)
+Test: 8068 patients (586 sepsis)
+
+=== Training XGBoost with Full Features ===
+Class imbalance ratio: 12.8
+
+Test AUROC: 0.879
+Test AUPRC: 0.628
+
+Top 10 Most Important Features:
+           feature  importance
+            iculos    0.112931
+        sirs_count    0.054987
+Hct_pct_change_12h    0.031870
+           lactate    0.027835
+               dbp    0.026827
+                hr    0.021620
+         sirs_temp    0.020491
+              temp    0.017671
+               map    0.017606
+           sirs_hr    0.017354
+
+PPV at different thresholds:
+Threshold    PPV        Sensitivity  Specificity  F1
+------------------------------------------------------------
+0.05         9.0       % 98.0        % 22.1        % 0.164
+0.10         13.3      % 88.7        % 54.5        % 0.231
+0.15         19.4      % 83.6        % 72.9        % 0.315
+0.20         25.2      % 79.7        % 81.5        % 0.383
+0.25         31.4      % 75.8        % 87.0        % 0.444
+0.30         37.0      % 73.0        % 90.3        % 0.491
+0.35         42.9      % 70.5        % 92.7        % 0.534
+0.40         47.6      % 68.1        % 94.1        % 0.560
+0.45         51.9      % 64.5        % 95.3        % 0.575
+0.50         56.8      % 62.3        % 96.3        % 0.594
+
+Best F1 threshold: 0.50 (F1: 0.594)
+
+=== Training LightGBM with Full Features ===
+
+Test AUROC: 0.890
+Test AUPRC: 0.650
+
+Top 10 Most Important Features:
+            feature  importance
+             iculos         650
+                 hr         301
+                age         292
+                map         251
+               temp         241
+                sbp         206
+                dbp         197
+               resp         188
+Resp_pct_change_12h         180
+ Resp_pct_change_6h         171
+
+PPV at different thresholds:
+Threshold    PPV        Sensitivity  Specificity  F1
+------------------------------------------------------------
+0.05         8.1       % 98.8        % 12.1        % 0.150
+0.10         10.7      % 94.2        % 38.5        % 0.192
+0.15         14.2      % 89.6        % 57.7        % 0.246
+0.20         18.2      % 86.3        % 69.6        % 0.300
+0.25         22.3      % 83.3        % 77.3        % 0.352
+0.30         26.8      % 81.4        % 82.6        % 0.403
+0.35         31.5      % 78.5        % 86.6        % 0.450
+0.40         36.1      % 75.9        % 89.5        % 0.490
+0.45         40.8      % 72.7        % 91.7        % 0.522
+0.50         46.6      % 71.3        % 93.6        % 0.564
+
+Best F1 threshold: 0.50 (F1: 0.564)
+
+============================================================
+MODEL COMPARISON
+============================================================
+Model           AUROC      AUPRC      Best Threshold
+------------------------------------------------------------
+XGBoost         0.879      0.628      0.50
+LightGBM        0.890      0.650      0.50
+
+Saving LightGBM model (AUPRC: 0.650)
+
+============================================================
+SUMMARY
+============================================================
+Trained ML models with 73 features including:
+- SIRS components (temp, HR, RR, WBC)
+- Vitals (SBP, DBP, MAP, O2Sat)
+- Labs (Lactate, Creatinine, Glucose, Hct, Platelets)
+- Trend features (6h and 12h changes)
+- Demographics (age, gender, ICU LOS)
+
+Best model AUROC: 0.890
+Best model AUPRC: 0.650
