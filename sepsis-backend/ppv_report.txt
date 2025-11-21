@@ -1,0 +1,18 @@
+Analyzing 34 patients with Threshold >= 50...
+
+========================================
+METRICS (Threshold: 50)
+========================================
+True Positives (TP): 5
+False Positives (FP): 2
+True Negatives (TN): 27
+False Negatives (FN): 0
+--------------------
+PPV (Precision): 71.43%
+Sensitivity (Recall): 100.00%
+Specificity: 93.10%
+========================================
+
+[!] FALSE POSITIVES (Alerted but No Sepsis):
+  - Richard Moore (ID: 2) | Risk: 55 | Diagnosis: Cholecystitis, post-ERCP
+  - Thomas King (ID: 12) | Risk: 52 | Diagnosis: Post-op hip replacement, wound infection

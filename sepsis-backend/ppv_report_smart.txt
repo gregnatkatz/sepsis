@@ -1,0 +1,15 @@
+Analyzing 34 patients with Smart Logic...
+Logic: Risk >= 60 OR (Risk >= 50 AND (SIRS >= 3 OR Lactate > 2.0))
+
+========================================
+METRICS (Smart Logic)
+========================================
+True Positives (TP): 5
+False Positives (FP): 0
+True Negatives (TN): 29
+False Negatives (FN): 0
+--------------------
+PPV (Precision): 100.00%
+Sensitivity (Recall): 100.00%
+Specificity: 100.00%
+========================================
