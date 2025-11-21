@@ -344,7 +344,9 @@ Diagnosis: {patient['diagnosis']}
     
     assessment += "\n**Recommended Actions:**\n"
     
-    if patient["risk_score"] >= 70:
+    is_high_risk = is_patient_high_risk(patient)
+    
+    if is_high_risk or patient["risk_score"] >= 70:
         assessment += "1. Blood cultures ×2 from separate sites (STAT)\n"
         assessment += "2. Repeat lactate in 2-4 hours\n"
         assessment += "3. Notify attending physician immediately\n"
@@ -437,9 +439,40 @@ async def analyze_patient(query: PatientQuery):
     
     return StreamingResponse(generate(), media_type="text/event-stream")
 
+def is_patient_high_risk(patient: Dict) -> bool:
+    """
+    Determine if a patient is high risk using Smart Logic to improve PPV.
+    Criteria:
+    1. Risk Score >= 60 (Standard High Risk)
+    OR
+    2. Risk Score >= 50 AND (SIRS >= 3 OR Lactate > 2.0) (Catch missed cases like Necrotizing Fasciitis)
+    """
+    risk_score = patient.get("risk_score", 0)
+    
+    # Criteria 1: High base risk
+    if risk_score >= 60:
+        return True
+        
+    # Criteria 2: Moderate risk with clinical warning signs
+    if risk_score >= 50:
+        # Check SIRS
+        sirs_count = patient.get("sirs_criteria", 0)
+        if isinstance(sirs_count, dict): # Handle if it's a dict from calculate_sirs_criteria
+            sirs_count = sirs_count.get("count", 0)
+            
+        # Check Lactate
+        lactate = 0.0
+        if "labs" in patient and "current" in patient["labs"]:
+             lactate = patient["labs"]["current"].get("lactate", 0.0)
+             
+        if sirs_count >= 3 or lactate > 2.0:
+            return True
+            
+    return False
+
 @app.get("/api/high-risk-patients")
 async def get_high_risk_patients():
-    high_risk = [p for p in MOCK_PATIENTS if p["risk_score"] >= 60]
+    high_risk = [p for p in MOCK_PATIENTS if is_patient_high_risk(p)]
     return {"patients": high_risk, "count": len(high_risk)}
 
 def generate_12hour_history(patient: Dict) -> Dict:
