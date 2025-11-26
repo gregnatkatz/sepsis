@@ -6,9 +6,18 @@ Each patient has 120-hour history data similar to what you'd see in EPIC.
 
 from datetime import datetime, timedelta
 import random
+import math
 
-def generate_120hr_vitals_history(base_vitals: dict, trajectory: str = "worsening") -> list:
-    """Generate 120 hours of vitals history (every 4 hours = 30 data points)"""
+def generate_120hr_vitals_history(base_vitals: dict, trajectory: str = "worsening", sepsis_type: str = "general") -> list:
+    """
+    Generate 120 hours of vitals history (every 4 hours = 30 data points)
+    
+    Clinically accurate sepsis progression patterns:
+    - Septic shock: Rapid HR increase, BP drop, temp spikes then drops (cold shock)
+    - Pneumonia: Gradual respiratory deterioration, persistent fever
+    - Necrotizing fasciitis: Rapid progression, pain out of proportion, tachycardia
+    - Post-op: Subtle changes, low-grade fever, gradual WBC rise
+    """
     history = []
     now = datetime.now()
     
@@ -19,44 +28,91 @@ def generate_120hr_vitals_history(base_vitals: dict, trajectory: str = "worsenin
         # Calculate progression factor (0 to 1 over 120 hours)
         progress = i / 29
         
+        # Clinically accurate progression patterns based on sepsis type
         if trajectory == "worsening":
-            hr_delta = progress * 30  # HR increases by 30 over time
-            temp_delta = progress * 1.5  # Temp increases by 1.5C
-            bp_delta = -progress * 20  # BP drops by 20
-            rr_delta = progress * 10  # RR increases by 10
-            spo2_delta = -progress * 8  # SpO2 drops by 8
+            if sepsis_type == "septic_shock":
+                # Septic shock: Rapid deterioration with hyperdynamic then hypodynamic phases
+                if progress < 0.5:
+                    # Early warm shock: high HR, maintained BP, fever
+                    hr_delta = progress * 40
+                    temp_delta = progress * 2.0
+                    bp_delta = -progress * 10
+                    rr_delta = progress * 8
+                    spo2_delta = -progress * 4
+                else:
+                    # Late cold shock: very high HR, dropping BP, temp may normalize
+                    hr_delta = 20 + (progress - 0.5) * 30
+                    temp_delta = 1.0 + (0.5 - abs(progress - 0.7)) * 1.5  # Peaks then drops
+                    bp_delta = -5 - (progress - 0.5) * 35
+                    rr_delta = 4 + (progress - 0.5) * 16
+                    spo2_delta = -2 - (progress - 0.5) * 12
+            elif sepsis_type == "pneumonia":
+                # Pneumonia: Gradual respiratory failure, persistent fever
+                hr_delta = progress * 25
+                temp_delta = 0.5 + progress * 1.2  # Persistent fever
+                bp_delta = -progress * 12
+                rr_delta = progress * 14  # Significant respiratory distress
+                spo2_delta = -progress * 10  # Progressive hypoxemia
+            elif sepsis_type == "necrotizing_fasciitis":
+                # Nec fasc: Rapid progression, disproportionate tachycardia
+                hr_delta = progress * 35  # Marked tachycardia
+                temp_delta = progress * 1.5
+                bp_delta = -progress * 15
+                rr_delta = progress * 10
+                spo2_delta = -progress * 5
+            else:
+                # General sepsis pattern
+                hr_delta = progress * 30
+                temp_delta = progress * 1.5
+                bp_delta = -progress * 20
+                rr_delta = progress * 10
+                spo2_delta = -progress * 8
         elif trajectory == "improving":
             hr_delta = -progress * 20
             temp_delta = -progress * 1.0
             bp_delta = progress * 15
             rr_delta = -progress * 6
             spo2_delta = progress * 5
-        else:  # stable
-            hr_delta = random.uniform(-5, 5)
-            temp_delta = random.uniform(-0.3, 0.3)
-            bp_delta = random.uniform(-5, 5)
-            rr_delta = random.uniform(-2, 2)
-            spo2_delta = random.uniform(-1, 1)
+        else:  # stable with subtle concerning trends (watchlist)
+            # Post-op pattern: subtle changes that warrant monitoring
+            hr_delta = progress * 8 + random.uniform(-3, 3)
+            temp_delta = progress * 0.5 + random.uniform(-0.2, 0.2)
+            bp_delta = -progress * 5 + random.uniform(-3, 3)
+            rr_delta = progress * 3 + random.uniform(-1, 1)
+            spo2_delta = -progress * 2 + random.uniform(-1, 1)
         
-        # Add some noise
-        noise = random.uniform(-3, 3)
+        # Add realistic physiological noise (circadian rhythm, measurement variability)
+        circadian_hr = 3 * math.sin(2 * math.pi * (hours_ago % 24) / 24)  # HR varies with time of day
+        circadian_temp = 0.3 * math.sin(2 * math.pi * ((hours_ago + 6) % 24) / 24)  # Temp peaks in evening
+        noise = random.uniform(-2, 2)
         
         vitals_point = {
             "timestamp": timestamp.isoformat(),
-            "heart_rate": round(base_vitals["heart_rate"] + hr_delta + noise),
-            "temperature": round(base_vitals["temperature"] + temp_delta + random.uniform(-0.2, 0.2), 1),
-            "systolic_bp": round(base_vitals["systolic_bp"] + bp_delta + noise),
-            "diastolic_bp": round(base_vitals["diastolic_bp"] + (bp_delta * 0.6) + noise * 0.5),
-            "respiratory_rate": round(base_vitals["respiratory_rate"] + rr_delta + random.uniform(-2, 2)),
-            "spo2": min(100, max(80, round(base_vitals["spo2"] + spo2_delta + random.uniform(-1, 1))))
+            "heart_rate": round(max(50, min(180, base_vitals["heart_rate"] + hr_delta + circadian_hr + noise))),
+            "temperature": round(max(35.5, min(41.0, base_vitals["temperature"] + temp_delta + circadian_temp + random.uniform(-0.1, 0.1))), 1),
+            "systolic_bp": round(max(60, min(180, base_vitals["systolic_bp"] + bp_delta + noise))),
+            "diastolic_bp": round(max(35, min(110, base_vitals["diastolic_bp"] + (bp_delta * 0.6) + noise * 0.5))),
+            "respiratory_rate": round(max(10, min(40, base_vitals["respiratory_rate"] + rr_delta + random.uniform(-1, 1)))),
+            "spo2": min(100, max(75, round(base_vitals["spo2"] + spo2_delta + random.uniform(-1, 1)))),
+            "map": round(max(40, min(120, (base_vitals["systolic_bp"] + bp_delta + 2 * (base_vitals["diastolic_bp"] + bp_delta * 0.6)) / 3)))
         }
         history.append(vitals_point)
     
     return history
 
 
-def generate_120hr_labs_history(base_labs: dict, trajectory: str = "worsening") -> list:
-    """Generate 120 hours of labs history (every 8 hours = 15 data points)"""
+def generate_120hr_labs_history(base_labs: dict, trajectory: str = "worsening", sepsis_type: str = "general") -> list:
+    """
+    Generate 120 hours of labs history (every 8 hours = 15 data points)
+    
+    Clinically accurate sepsis biomarker progressions:
+    - Lactate: Rises with tissue hypoperfusion, clears with treatment (half-life ~1hr)
+    - WBC: Can be elevated (leukocytosis) or depressed (leukopenia in severe sepsis)
+    - Procalcitonin: Rises 4-6hrs after infection, peaks at 24-48hrs
+    - CRP: Rises 6-8hrs after inflammation, peaks at 48hrs
+    - Creatinine: Rises with AKI, delayed marker
+    - Platelets: Drop with DIC/consumption, can be early marker
+    """
     history = []
     now = datetime.now()
     
@@ -67,30 +123,72 @@ def generate_120hr_labs_history(base_labs: dict, trajectory: str = "worsening") 
         progress = i / 14
         
         if trajectory == "worsening":
-            lactate_delta = progress * 2.5
-            wbc_delta = progress * 10
-            creatinine_delta = progress * 1.0
-            bilirubin_delta = progress * 0.8
+            if sepsis_type == "septic_shock":
+                # Septic shock: Rapid lactate rise, significant organ dysfunction
+                lactate_delta = progress * 3.5  # Higher lactate in shock
+                wbc_delta = progress * 12 if progress < 0.7 else 8 + (progress - 0.7) * -5  # May drop late
+                creatinine_delta = progress * 1.5  # AKI common in shock
+                bilirubin_delta = progress * 1.2
+                platelets_drop = progress * 150  # Significant thrombocytopenia
+                pct_rise = progress * 8  # High procalcitonin
+            elif sepsis_type == "pneumonia":
+                # Pneumonia: Moderate lactate, respiratory-focused
+                lactate_delta = progress * 2.0
+                wbc_delta = progress * 8
+                creatinine_delta = progress * 0.6
+                bilirubin_delta = progress * 0.4
+                platelets_drop = progress * 60
+                pct_rise = progress * 4
+            elif sepsis_type == "necrotizing_fasciitis":
+                # Nec fasc: Rapid progression, CK elevation (not tracked here but implied)
+                lactate_delta = progress * 2.8
+                wbc_delta = progress * 10
+                creatinine_delta = progress * 0.8
+                bilirubin_delta = progress * 0.5
+                platelets_drop = progress * 100
+                pct_rise = progress * 3
+            else:
+                # General sepsis
+                lactate_delta = progress * 2.5
+                wbc_delta = progress * 10
+                creatinine_delta = progress * 1.0
+                bilirubin_delta = progress * 0.8
+                platelets_drop = progress * 100
+                pct_rise = progress * 5
         elif trajectory == "improving":
             lactate_delta = -progress * 1.5
             wbc_delta = -progress * 5
             creatinine_delta = -progress * 0.5
             bilirubin_delta = -progress * 0.3
-        else:
-            lactate_delta = random.uniform(-0.3, 0.3)
-            wbc_delta = random.uniform(-1, 1)
-            creatinine_delta = random.uniform(-0.1, 0.1)
-            bilirubin_delta = random.uniform(-0.1, 0.1)
+            platelets_drop = -progress * 50  # Recovering
+            pct_rise = -progress * 3
+        else:  # stable/watchlist - subtle concerning trends
+            lactate_delta = progress * 0.6 + random.uniform(-0.2, 0.2)
+            wbc_delta = progress * 3 + random.uniform(-1, 1)
+            creatinine_delta = progress * 0.2 + random.uniform(-0.05, 0.05)
+            bilirubin_delta = progress * 0.1 + random.uniform(-0.05, 0.05)
+            platelets_drop = progress * 30
+            pct_rise = progress * 0.8
+        
+        # Calculate procalcitonin with realistic kinetics (rises 4-6hrs, peaks 24-48hrs)
+        pct_kinetic_factor = 1.0 if progress > 0.2 else progress * 5  # Delayed rise
+        
+        # Calculate CRP with realistic kinetics (rises 6-8hrs, peaks 48hrs)
+        crp_kinetic_factor = 1.0 if progress > 0.25 else progress * 4
         
         labs_point = {
             "timestamp": timestamp.isoformat(),
-            "lactate": round(max(0.5, base_labs["lactate"] + lactate_delta + random.uniform(-0.2, 0.2)), 1),
-            "wbc": round(max(2, base_labs["wbc"] + wbc_delta + random.uniform(-1, 1)), 1),
-            "creatinine": round(max(0.5, base_labs["creatinine"] + creatinine_delta + random.uniform(-0.1, 0.1)), 1),
-            "bilirubin": round(max(0.2, base_labs["bilirubin"] + bilirubin_delta + random.uniform(-0.1, 0.1)), 1),
-            "platelets": round(max(50, 250 - progress * 100 + random.uniform(-20, 20))),
-            "procalcitonin": round(max(0.1, progress * 5 + random.uniform(-0.5, 0.5)), 2) if trajectory == "worsening" else round(max(0.1, 2 - progress * 1.5), 2),
-            "crp": round(max(1, progress * 150 + random.uniform(-10, 10)), 1) if trajectory == "worsening" else round(max(1, 100 - progress * 80), 1)
+            "lactate": round(max(0.5, min(15.0, base_labs["lactate"] + lactate_delta + random.uniform(-0.2, 0.2))), 1),
+            "wbc": round(max(1.5, min(40.0, base_labs["wbc"] + wbc_delta + random.uniform(-0.5, 0.5))), 1),
+            "creatinine": round(max(0.5, min(8.0, base_labs["creatinine"] + creatinine_delta + random.uniform(-0.05, 0.05))), 2),
+            "bilirubin": round(max(0.2, min(10.0, base_labs["bilirubin"] + bilirubin_delta + random.uniform(-0.05, 0.05))), 1),
+            "platelets": round(max(20, min(400, 250 - platelets_drop + random.uniform(-15, 15)))),
+            "procalcitonin": round(max(0.05, min(50.0, 0.1 + pct_rise * pct_kinetic_factor + random.uniform(-0.2, 0.2))), 2),
+            "crp": round(max(0.5, min(350.0, 5 + (progress * 150 if trajectory == "worsening" else -progress * 80) * crp_kinetic_factor + random.uniform(-5, 5))), 1),
+            "hemoglobin": round(max(6.0, min(16.0, 12.5 - progress * 2 + random.uniform(-0.2, 0.2))), 1),
+            "potassium": round(max(2.8, min(6.5, 4.0 + progress * 0.8 + random.uniform(-0.1, 0.1))), 1),
+            "sodium": round(max(125, min(150, 140 - progress * 3 + random.uniform(-1, 1)))),
+            "glucose": round(max(60, min(400, 120 + progress * 50 + random.uniform(-10, 10))))
         }
         history.append(labs_point)
     
@@ -606,42 +704,58 @@ FEATURED_PATIENTS = [
 
 
 def get_featured_patients_with_history():
-    """Get featured patients with generated 120-hour history data"""
+    """
+    Get featured patients with generated 120-hour history data.
+    
+    Each patient gets clinically accurate progression patterns based on their
+    specific sepsis type for realistic EHR-like data visualization.
+    """
     patients_with_history = []
+    
+    # Map patient IDs to their specific sepsis types for accurate progression modeling
+    sepsis_type_map = {
+        "DEMO-001": "septic_shock",      # Eleanor Martinez - Urosepsis with septic shock
+        "DEMO-002": "pneumonia",          # Robert Thompson - Severe CAP with sepsis
+        "DEMO-003": "necrotizing_fasciitis",  # William Chen - Necrotizing fasciitis
+        "DEMO-004": "post_op"             # Margaret O'Brien - Post-op (watchlist)
+    }
     
     for patient in FEATURED_PATIENTS:
         patient_copy = {**patient}
         
-        # Determine trajectory based on ground truth
+        # Get sepsis type for this patient
+        sepsis_type = sepsis_type_map.get(patient["id"], "general")
+        
+        # Determine trajectory based on ground truth and risk level
         if patient["ground_truth"]["sepsis_confirmed"]:
             trajectory = "worsening"
         elif patient["risk_score"] >= 40:
-            trajectory = "stable"
+            trajectory = "stable"  # Watchlist patients - subtle concerning trends
         else:
             trajectory = "improving"
         
-        # Generate base values for history generation
+        # Generate base values for history generation (starting point 120 hours ago)
         vitals_current = patient["vitals"]["current"]
         base_vitals = {
-            "heart_rate": vitals_current.get("heart_rate", 80) - 20,
-            "temperature": vitals_current.get("temperature", 37.0) - 1.0,
-            "systolic_bp": int(vitals_current.get("blood_pressure", "120/80").split("/")[0]) + 15,
-            "diastolic_bp": int(vitals_current.get("blood_pressure", "120/80").split("/")[1]) + 10,
-            "respiratory_rate": vitals_current.get("respiratory_rate", 16) - 6,
-            "spo2": min(100, vitals_current.get("spo2", 98) + 5)
+            "heart_rate": vitals_current.get("heart_rate", 80) - 25,  # Start lower
+            "temperature": vitals_current.get("temperature", 37.0) - 1.2,  # Start near normal
+            "systolic_bp": int(vitals_current.get("blood_pressure", "120/80").split("/")[0]) + 20,  # Start higher
+            "diastolic_bp": int(vitals_current.get("blood_pressure", "120/80").split("/")[1]) + 12,
+            "respiratory_rate": vitals_current.get("respiratory_rate", 16) - 8,  # Start lower
+            "spo2": min(100, vitals_current.get("spo2", 98) + 6)  # Start higher
         }
         
         labs_current = patient["labs"]["current"]
         base_labs = {
-            "lactate": max(0.8, labs_current.get("lactate", 1.0) - 2.0),
-            "wbc": max(5, labs_current.get("wbc", 8.0) - 8.0),
-            "creatinine": max(0.7, labs_current.get("creatinine", 1.0) - 0.8),
-            "bilirubin": max(0.3, labs_current.get("bilirubin", 0.8) - 0.5)
+            "lactate": max(0.7, labs_current.get("lactate", 1.0) - 2.5),  # Start near normal
+            "wbc": max(4.5, labs_current.get("wbc", 8.0) - 10.0),  # Start near normal
+            "creatinine": max(0.6, labs_current.get("creatinine", 1.0) - 1.0),  # Start near normal
+            "bilirubin": max(0.3, labs_current.get("bilirubin", 0.8) - 0.6)
         }
         
-        # Generate history
-        patient_copy["vitals_history"] = generate_120hr_vitals_history(base_vitals, trajectory)
-        patient_copy["labs_history"] = generate_120hr_labs_history(base_labs, trajectory)
+        # Generate history with sepsis-type-specific progression patterns
+        patient_copy["vitals_history"] = generate_120hr_vitals_history(base_vitals, trajectory, sepsis_type)
+        patient_copy["labs_history"] = generate_120hr_labs_history(base_labs, trajectory, sepsis_type)
         
         patients_with_history.append(patient_copy)
     

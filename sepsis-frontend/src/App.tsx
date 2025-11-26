@@ -1477,10 +1477,10 @@ function App() {
                             </td>
                             <td className="p-3 text-gray-300">{patient.sirs_criteria}/4</td>
                             <td className="p-3 text-gray-300 max-w-xs truncate">{patient.diagnosis}</td>
-                            <td className="p-3 text-gray-300">{patient.vitals.current.heart_rate}</td>
-                            <td className="p-3 text-gray-300">{patient.vitals.current.temperature}°C</td>
-                            <td className="p-3 text-gray-300">{patient.labs.current.wbc}</td>
-                            <td className="p-3 text-gray-300">{patient.labs.current.lactate}</td>
+                            <td className="p-3 text-gray-300">{patient.vitals?.current?.heart_rate ?? 'N/A'}</td>
+                            <td className="p-3 text-gray-300">{patient.vitals?.current?.temperature ? `${patient.vitals.current.temperature}°C` : 'N/A'}</td>
+                            <td className="p-3 text-gray-300">{patient.labs?.current?.wbc ?? 'N/A'}</td>
+                            <td className="p-3 text-gray-300">{patient.labs?.current?.lactate ?? 'N/A'}</td>
                             <td className="p-3">
                               <Button
                                 size="sm"
@@ -2157,7 +2157,7 @@ function App() {
                         <Skeleton className="h-64 w-full bg-gray-700" />
                         <Skeleton className="h-64 w-full bg-gray-700" />
                       </div>
-                    ) : reportData && reportData.kaggle ? (
+                    ) : reportData && reportData.kaggle && reportData.kaggle.threshold_metrics ? (
                       <div className="space-y-6">
                         {/* Kaggle Dataset Metrics */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
