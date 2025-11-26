@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from mock_patients import MOCK_PATIENTS
+from featured_patients import FEATURED_PATIENTS, get_featured_patients_with_history
 from app.agui import create_agui_session, handle_agui_websocket
 from app.llm_client import get_llm_client, ModelType
 from app.database import (
@@ -32,6 +33,10 @@ from app.evaluation_agent import (
 from app.reports import get_trending_outcomes, get_pathway_adoption
 from app.synthetic_outcomes import generate_synthetic_outcomes, generate_pathway_adoption as generate_synthetic_pathway_adoption
 from app.validation_metrics import calculate_validation_metrics
+from app.risk_logic import (
+    is_patient_high_risk, get_risk_reason, classify_risk_level,
+    calculate_sepsis_stage, get_priority_score, get_patient_lactate, get_patient_sirs
+)
 
 load_dotenv()
 
@@ -439,8 +444,309 @@ async def analyze_patient(query: PatientQuery):
 
 @app.get("/api/high-risk-patients")
 async def get_high_risk_patients():
-    high_risk = [p for p in MOCK_PATIENTS if p["risk_score"] >= 60]
+    """Get high-risk patients using Smart Logic for improved PPV"""
+    high_risk = []
+    for p in MOCK_PATIENTS:
+        if is_patient_high_risk(p):
+            patient_data = {**p}
+            patient_data["risk_reason"] = get_risk_reason(p)
+            patient_data["smart_risk_level"] = classify_risk_level(p)
+            stage_name, stage_num = calculate_sepsis_stage(p)
+            patient_data["sepsis_stage"] = stage_name
+            patient_data["sepsis_stage_num"] = stage_num
+            patient_data["priority_score"] = get_priority_score(p)
+            high_risk.append(patient_data)
+    
+    # Sort by priority score (highest first)
+    high_risk.sort(key=lambda x: x["priority_score"], reverse=True)
     return {"patients": high_risk, "count": len(high_risk)}
+
+
+@app.get("/api/sepsis-worklist")
+async def get_sepsis_worklist():
+    """
+    Clinical Worklist: Prioritized list of patients requiring immediate attention.
+    Sorted by sepsis stage, risk score, and time since admission.
+    This is the primary view for nurses/clinicians to triage patients.
+    """
+    worklist = []
+    for p in MOCK_PATIENTS:
+        if is_patient_high_risk(p):
+            stage_name, stage_num = calculate_sepsis_stage(p)
+            sirs_count = get_patient_sirs(p)
+            lactate = get_patient_lactate(p)
+            
+            # Calculate hours since admission
+            admission_date = p.get("admission_date", "2025-11-14")
+            try:
+                admission_dt = datetime.strptime(admission_date, "%Y-%m-%d")
+                hours_since_admission = (datetime.now() - admission_dt).total_seconds() / 3600
+            except:
+                hours_since_admission = 48
+            
+            worklist_item = {
+                "id": p["id"],
+                "name": p["name"],
+                "mrn": p.get("mrn", ""),
+                "room": p.get("room", ""),
+                "age": p.get("age", 0),
+                "gender": p.get("gender", ""),
+                "diagnosis": p.get("diagnosis", ""),
+                "risk_score": p.get("risk_score", 0),
+                "risk_level": classify_risk_level(p),
+                "risk_reason": get_risk_reason(p),
+                "sepsis_stage": stage_name,
+                "sepsis_stage_num": stage_num,
+                "sirs_count": sirs_count,
+                "lactate": lactate,
+                "priority_score": get_priority_score(p),
+                "hours_since_admission": round(hours_since_admission, 1),
+                "devices": p.get("devices", []),
+                "vitals": p.get("vitals", {}).get("current", {}),
+                "labs": p.get("labs", {}).get("current", {}),
+                "notes": p.get("notes", [])[:2]  # Last 2 notes
+            }
+            worklist.append(worklist_item)
+    
+    # Sort by priority (sepsis stage desc, then risk score desc)
+    worklist.sort(key=lambda x: (x["sepsis_stage_num"], x["priority_score"]), reverse=True)
+    
+    return {
+        "worklist": worklist,
+        "count": len(worklist),
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+@app.get("/api/watchlist-patients")
+async def get_watchlist_patients():
+    """
+    Watchlist: Sub-threshold patients who need monitoring.
+    These are patients with moderate risk (40-49) who have concerning signs.
+    Nurses should check these patients regularly for deterioration.
+    """
+    watchlist = []
+    for p in MOCK_PATIENTS:
+        risk_score = p.get("risk_score", 0)
+        sirs_count = get_patient_sirs(p)
+        lactate = get_patient_lactate(p)
+        
+        # Watchlist criteria: moderate risk with some warning signs
+        if 40 <= risk_score < 50 and (sirs_count >= 2 or lactate > 1.5):
+            stage_name, stage_num = calculate_sepsis_stage(p)
+            
+            watchlist_item = {
+                "id": p["id"],
+                "name": p["name"],
+                "mrn": p.get("mrn", ""),
+                "room": p.get("room", ""),
+                "age": p.get("age", 0),
+                "gender": p.get("gender", ""),
+                "diagnosis": p.get("diagnosis", ""),
+                "risk_score": risk_score,
+                "risk_level": "WATCH",
+                "watch_reason": f"Risk {risk_score} with SIRS={sirs_count}, Lactate={lactate:.1f}",
+                "sepsis_stage": stage_name,
+                "sirs_count": sirs_count,
+                "lactate": lactate,
+                "vitals": p.get("vitals", {}).get("current", {}),
+                "labs": p.get("labs", {}).get("current", {}),
+                "recommended_actions": [
+                    "Monitor vitals every 2 hours",
+                    "Repeat lactate in 4 hours",
+                    "Notify physician if condition worsens"
+                ]
+            }
+            watchlist.append(watchlist_item)
+    
+    # Sort by risk score descending
+    watchlist.sort(key=lambda x: x["risk_score"], reverse=True)
+    
+    return {
+        "watchlist": watchlist,
+        "count": len(watchlist),
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+@app.get("/api/patients/{patient_id}/sepsis-huddle-summary")
+async def get_sepsis_huddle_summary(patient_id: str):
+    """
+    Sepsis Huddle Summary: Quick clinical summary for rapid huddles.
+    Consolidates: why worried, trajectory, top 3 actions, bundle status.
+    """
+    patient = next((p for p in MOCK_PATIENTS if p["id"] == patient_id), None)
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    
+    stage_name, stage_num = calculate_sepsis_stage(patient)
+    sirs_count = get_patient_sirs(patient)
+    lactate = get_patient_lactate(patient)
+    risk_reason = get_risk_reason(patient)
+    
+    # Determine trajectory based on vitals/labs trends
+    vitals_current = patient.get("vitals", {}).get("current", {})
+    vitals_prev = patient.get("vitals", {}).get("previous", {})
+    labs_current = patient.get("labs", {}).get("current", {})
+    labs_prev = patient.get("labs", {}).get("previous", {})
+    
+    trajectory = "stable"
+    trajectory_details = []
+    
+    if vitals_prev and labs_prev:
+        hr_change = vitals_current.get("heart_rate", 0) - vitals_prev.get("heart_rate", 0)
+        lactate_change = labs_current.get("lactate", 0) - labs_prev.get("lactate", 0)
+        
+        if hr_change > 10 or lactate_change > 0.5:
+            trajectory = "worsening"
+            if hr_change > 10:
+                trajectory_details.append(f"HR increased by {hr_change}")
+            if lactate_change > 0.5:
+                trajectory_details.append(f"Lactate increased by {lactate_change:.1f}")
+        elif hr_change < -10 or lactate_change < -0.3:
+            trajectory = "improving"
+            if hr_change < -10:
+                trajectory_details.append(f"HR decreased by {abs(hr_change)}")
+            if lactate_change < -0.3:
+                trajectory_details.append(f"Lactate decreased by {abs(lactate_change):.1f}")
+    
+    # Top 3 recommended actions based on stage
+    if stage_num >= 3:
+        top_actions = [
+            "Blood cultures x2 from separate sites (STAT)",
+            "Broad-spectrum antibiotics within 1 hour",
+            "30 mL/kg crystalloid for hypotension or lactate >= 4"
+        ]
+    elif stage_num >= 2:
+        top_actions = [
+            "Blood cultures before antibiotics",
+            "Repeat lactate in 2-4 hours",
+            "Notify attending physician"
+        ]
+    else:
+        top_actions = [
+            "Continue monitoring vitals q2h",
+            "Repeat labs in 4-6 hours",
+            "Reassess if clinical status changes"
+        ]
+    
+    return {
+        "patient_id": patient_id,
+        "name": patient.get("name", ""),
+        "room": patient.get("room", ""),
+        "diagnosis": patient.get("diagnosis", ""),
+        "why_worried": {
+            "risk_score": patient.get("risk_score", 0),
+            "risk_reason": risk_reason,
+            "sepsis_stage": stage_name,
+            "sirs_count": sirs_count,
+            "lactate": lactate
+        },
+        "trajectory": {
+            "status": trajectory,
+            "details": trajectory_details
+        },
+        "top_actions": top_actions,
+        "bundle_status": {
+            "blood_cultures": "pending",
+            "lactate_measured": True,
+            "antibiotics": "pending",
+            "fluids": "pending" if stage_num >= 3 else "not_indicated"
+        },
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.get("/api/featured-patients")
+async def get_featured_patients():
+    """
+    Get featured demo patients with comprehensive EHR-like data.
+    These 4 patients demonstrate different sepsis presentations:
+    1. UTI Septic Shock (Critical)
+    2. Pneumonia Sepsis (High Risk)
+    3. Necrotizing Fasciitis (Moderate - Smart Logic catch)
+    4. Post-op Abdominal (Watchlist candidate)
+    """
+    patients_with_history = get_featured_patients_with_history()
+    
+    # Add Smart Logic analysis to each patient
+    for p in patients_with_history:
+        p["is_high_risk"] = is_patient_high_risk(p)
+        p["risk_reason"] = get_risk_reason(p)
+        p["smart_risk_level"] = classify_risk_level(p)
+        stage_name, stage_num = calculate_sepsis_stage(p)
+        p["sepsis_stage"] = stage_name
+        p["sepsis_stage_num"] = stage_num
+        p["priority_score"] = get_priority_score(p)
+    
+    return {
+        "patients": patients_with_history,
+        "count": len(patients_with_history),
+        "description": "Featured demo patients with 120-hour history data"
+    }
+
+
+@app.get("/api/patients/{patient_id}/journey-120hr")
+async def get_patient_journey_120hr(patient_id: str):
+    """
+    Get 120-hour patient journey data for EPIC-style reporting.
+    Includes vitals history, labs history, medications, notes, and bundle status.
+    """
+    # Check featured patients first
+    featured = get_featured_patients_with_history()
+    patient = next((p for p in featured if p["id"] == patient_id), None)
+    
+    if not patient:
+        # Fall back to mock patients
+        patient = next((p for p in MOCK_PATIENTS if p["id"] == patient_id), None)
+        if patient:
+            # Generate 120-hour history for mock patient
+            from featured_patients import generate_120hr_vitals_history, generate_120hr_labs_history
+            
+            vitals_current = patient.get("vitals", {}).get("current", {})
+            base_vitals = {
+                "heart_rate": vitals_current.get("heart_rate", 80) - 15,
+                "temperature": vitals_current.get("temperature", 37.0) - 0.8,
+                "systolic_bp": 120,
+                "diastolic_bp": 75,
+                "respiratory_rate": vitals_current.get("respiratory_rate", 16) - 4,
+                "spo2": min(100, vitals_current.get("spo2", 98) + 3)
+            }
+            
+            labs_current = patient.get("labs", {}).get("current", {})
+            base_labs = {
+                "lactate": max(0.8, labs_current.get("lactate", 1.0) - 1.5),
+                "wbc": max(5, labs_current.get("wbc", 8.0) - 6.0),
+                "creatinine": max(0.7, labs_current.get("creatinine", 1.0) - 0.5),
+                "bilirubin": max(0.3, labs_current.get("bilirubin", 0.8) - 0.3)
+            }
+            
+            trajectory = "worsening" if patient.get("risk_level") in ["CRITICAL", "HIGH"] else "stable"
+            patient["vitals_history"] = generate_120hr_vitals_history(base_vitals, trajectory)
+            patient["labs_history"] = generate_120hr_labs_history(base_labs, trajectory)
+    
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    
+    # Add Smart Logic analysis
+    patient["is_high_risk"] = is_patient_high_risk(patient)
+    patient["risk_reason"] = get_risk_reason(patient)
+    stage_name, stage_num = calculate_sepsis_stage(patient)
+    patient["sepsis_stage"] = stage_name
+    patient["sepsis_stage_num"] = stage_num
+    
+    return {
+        "patient": patient,
+        "vitals_history": patient.get("vitals_history", []),
+        "labs_history": patient.get("labs_history", []),
+        "medications": patient.get("medications", []),
+        "notes": patient.get("notes", []),
+        "problem_list": patient.get("problem_list", []),
+        "allergies": patient.get("allergies", []),
+        "devices": patient.get("devices", []),
+        "sepsis_bundle": patient.get("sepsis_bundle", {}),
+        "timestamp": datetime.now().isoformat()
+    }
+
 
 def generate_12hour_history(patient: Dict) -> Dict:
     """Generate 12-hour historical data based on current/previous values and risk level"""
