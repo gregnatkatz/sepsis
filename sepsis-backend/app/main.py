@@ -166,7 +166,14 @@ async def get_patient_from_db(patient_id: str, db: AsyncSession) -> Optional[Dic
             "Pyelonephritis",
             "Cellulitis"
         ]
-        diagnosis_idx = int(patient_id.split('-')[1]) % len(diagnoses)
+        try:
+            parts = patient_id.split('-')
+            if len(parts) >= 2:
+                diagnosis_idx = int(parts[1]) % len(diagnoses)
+            else:
+                diagnosis_idx = hash(patient_id) % len(diagnoses)
+        except (ValueError, IndexError):
+            diagnosis_idx = hash(patient_id) % len(diagnoses)
         diagnosis = diagnoses[diagnosis_idx]
     else:
         diagnosis = "Sepsis monitoring"
@@ -2107,6 +2114,33 @@ async def get_rl_results():
     try:
         with open(results_path, 'r') as f:
             results = json.load(f)
+        
+        # Transform learning_curves from dict of arrays to array of objects for frontend
+        lc = results.get("learning_curves", {})
+        if isinstance(lc, dict) and "batches" in lc:
+            transformed_curves = []
+            batches = lc.get("batches", [])
+            rl_win_rates = lc.get("rl_win_rate", [])
+            baseline_win_rates = lc.get("baseline_win_rate", [])
+            rl_utilities = lc.get("rl_utility", [])
+            baseline_utilities = lc.get("baseline_utility", [])
+            rl_regrets = lc.get("rl_regret", [])
+            
+            for i, batch_id in enumerate(batches):
+                transformed_curves.append({
+                    "batch_id": batch_id,
+                    "rl_win_rate": rl_win_rates[i] * 100 if i < len(rl_win_rates) else 0,
+                    "baseline_win_rate": baseline_win_rates[i] * 100 if i < len(baseline_win_rates) else 0,
+                    "rl_utility": rl_utilities[i] if i < len(rl_utilities) else 0,
+                    "baseline_utility": baseline_utilities[i] if i < len(baseline_utilities) else 0,
+                    "rl_regret": rl_regrets[i] if i < len(rl_regrets) else 0
+                })
+            results["learning_curves"] = transformed_curves
+        
+        # Transform insights_report to insights for frontend
+        if "insights_report" in results and "insights" not in results:
+            results["insights"] = results["insights_report"]
+        
         return results
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to load RL results: {str(e)}")

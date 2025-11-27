@@ -2245,5 +2245,135 @@ MOCK_PATIENTS = [
             "qsofa_score": 0,
             "sofa_score": 0
         }
+    },
+    {
+        "admission_date": "2025-11-24",
+        "age": 71,
+        "devices": [
+            {"days": 2, "type": "Peripheral IV"},
+            {"days": 2, "type": "Foley catheter"}
+        ],
+        "diagnosis": "Urinary tract infection, possible early sepsis",
+        "gender": "F",
+        "id": "watchlist-1",
+        "labs": {
+            "current": {
+                "bilirubin": 0.6,
+                "creatinine": 1.2,
+                "lactate": 1.9,
+                "wbc": 13.8
+            },
+            "previous": {
+                "bilirubin": 0.5,
+                "creatinine": 1.0,
+                "lactate": 1.3,
+                "wbc": 10.5
+            }
+        },
+        "mrn": "MRN-2025-005",
+        "name": "Patricia Williams",
+        "notes": [
+            {
+                "note": "Lactate up to 1.9 from 1.3 yesterday. Patient more confused this AM. MD notified.",
+                "time": "08:00"
+            },
+            {
+                "note": "Low-grade fever 38.1C. Urine cloudy with sediment.",
+                "time": "04:00"
+            }
+        ],
+        "risk_level": "MODERATE",
+        "risk_score": 48,
+        "room": "3E-322",
+        "sirs_criteria": 2,
+        "vitals": {
+            "current": {
+                "blood_pressure": "108/65",
+                "heart_rate": 96,
+                "respiratory_rate": 20,
+                "spo2": 95,
+                "temperature": 38.1
+            },
+            "previous": {
+                "blood_pressure": "115/70",
+                "heart_rate": 88,
+                "respiratory_rate": 18,
+                "spo2": 97,
+                "temperature": 37.4
+            }
+        },
+        "ground_truth": {
+            "sepsis_confirmed": False,
+            "sepsis_onset_time": None,
+            "sepsis_source": "urinary",
+            "organ_dysfunction": {},
+            "qsofa_score": 1,
+            "sofa_score": 1
+        }
+    },
+    {
+        "admission_date": "2025-11-23",
+        "age": 68,
+        "devices": [
+            {"days": 3, "type": "Peripheral IV x2"},
+            {"days": 2, "type": "Biliary stent"}
+        ],
+        "diagnosis": "Post-ERCP cholangitis, early presentation",
+        "gender": "M",
+        "id": "watchlist-2",
+        "labs": {
+            "current": {
+                "bilirubin": 2.8,
+                "creatinine": 1.1,
+                "lactate": 1.6,
+                "wbc": 12.5
+            },
+            "previous": {
+                "bilirubin": 1.8,
+                "creatinine": 1.0,
+                "lactate": 1.2,
+                "wbc": 9.2
+            }
+        },
+        "mrn": "MRN-2025-006",
+        "name": "Harold Thompson",
+        "notes": [
+            {
+                "note": "Fever spike to 38.3C overnight. Bilirubin up to 2.8. GI consulted.",
+                "time": "07:30"
+            },
+            {
+                "note": "Patient with rigors, temp 38.1C. Blood cultures drawn. Zosyn started.",
+                "time": "03:00"
+            }
+        ],
+        "risk_level": "MODERATE",
+        "risk_score": 44,
+        "room": "3E-328",
+        "sirs_criteria": 2,
+        "vitals": {
+            "current": {
+                "blood_pressure": "112/68",
+                "heart_rate": 94,
+                "respiratory_rate": 19,
+                "spo2": 96,
+                "temperature": 38.3
+            },
+            "previous": {
+                "blood_pressure": "122/75",
+                "heart_rate": 82,
+                "respiratory_rate": 16,
+                "spo2": 98,
+                "temperature": 37.2
+            }
+        },
+        "ground_truth": {
+            "sepsis_confirmed": False,
+            "sepsis_onset_time": None,
+            "sepsis_source": "biliary",
+            "organ_dysfunction": {},
+            "qsofa_score": 0,
+            "sofa_score": 1
+        }
     }
 ]

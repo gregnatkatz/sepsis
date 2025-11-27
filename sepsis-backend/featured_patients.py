@@ -694,12 +694,242 @@ PATIENT_POSTOP_ABDOMINAL = {
 }
 
 
+# Watchlist Patient 1: Early UTI with Rising Lactate (Borderline - Watch Closely)
+PATIENT_WATCHLIST_UTI = {
+    "id": "DEMO-005",
+    "mrn": "MRN-2025-005",
+    "name": "Patricia Williams",
+    "age": 71,
+    "gender": "F",
+    "room": "3E-322",
+    "bed": "A",
+    "admission_date": "2025-11-24",
+    "admission_time": "10:00",
+    "attending_physician": "Dr. Michael Torres",
+    "primary_nurse": "RN Amanda Chen",
+    "diagnosis": "Urinary tract infection, possible early sepsis",
+    "chief_complaint": "Dysuria, frequency, mild confusion",
+    "risk_score": 48,  # Watchlist - borderline
+    "risk_level": "MODERATE",
+    "sirs_criteria": 2,
+    
+    "vitals": {
+        "current": {
+            "heart_rate": 96,
+            "blood_pressure": "108/65",
+            "respiratory_rate": 20,
+            "temperature": 38.1,
+            "spo2": 95,
+            "map": 79
+        },
+        "previous": {
+            "heart_rate": 88,
+            "blood_pressure": "115/70",
+            "respiratory_rate": 18,
+            "temperature": 37.4,
+            "spo2": 97,
+            "map": 85
+        }
+    },
+    
+    "labs": {
+        "current": {
+            "lactate": 1.9,  # Rising - concerning
+            "wbc": 13.8,
+            "creatinine": 1.2,
+            "bilirubin": 0.6,
+            "platelets": 185,
+            "procalcitonin": 0.7,
+            "crp": 48,
+            "bun": 22,
+            "glucose": 135,
+            "potassium": 4.1,
+            "sodium": 140,
+            "hemoglobin": 11.2
+        },
+        "previous": {
+            "lactate": 1.3,  # Was lower
+            "wbc": 10.5,
+            "creatinine": 1.0,
+            "bilirubin": 0.5,
+            "platelets": 205,
+            "procalcitonin": 0.3,
+            "crp": 28
+        }
+    },
+    
+    "devices": [
+        {"type": "Peripheral IV", "days": 2, "inserted": "2025-11-24"},
+        {"type": "Foley catheter", "days": 2, "inserted": "2025-11-24"}
+    ],
+    
+    "medications": [
+        {"name": "Ciprofloxacin", "dose": "400mg", "route": "IV", "frequency": "Q12H", "start": "2025-11-24 12:00"},
+        {"name": "Acetaminophen", "dose": "650mg", "route": "PO", "frequency": "Q6H PRN", "start": "2025-11-24 10:00"},
+        {"name": "Lisinopril", "dose": "10mg", "route": "PO", "frequency": "Daily", "start": "Home med"}
+    ],
+    
+    "notes": [
+        {"time": "08:00", "author": "RN Chen", "note": "Lactate up to 1.9 from 1.3 yesterday. Patient more confused this AM, oriented x2. HR trending up. MD notified - considering broadening antibiotics."},
+        {"time": "04:00", "author": "RN Chen", "note": "Low-grade fever 38.1C. Urine cloudy with sediment. Foley draining well."},
+        {"time": "20:00", "author": "RN Davis", "note": "UA positive for nitrites, leukocyte esterase. Blood cultures sent. Started on Cipro."}
+    ],
+    
+    "problem_list": [
+        {"problem": "Urinary tract infection", "status": "Active", "onset": "2025-11-24"},
+        {"problem": "Hypertension", "status": "Chronic", "onset": "2015"},
+        {"problem": "Type 2 Diabetes", "status": "Chronic", "onset": "2018"},
+        {"problem": "Recurrent UTIs", "status": "Chronic", "onset": "2020"}
+    ],
+    
+    "allergies": [
+        {"allergen": "Sulfa drugs", "reaction": "Rash", "severity": "Moderate"}
+    ],
+    
+    "sepsis_bundle": {
+        "lactate_measured": {"status": "complete", "time": "2025-11-26 06:00", "value": 1.9},
+        "blood_cultures": {"status": "complete", "time": "2025-11-24 12:00", "result": "Pending"},
+        "antibiotics": {"status": "complete", "time": "2025-11-24 12:00", "within_1hr": True},
+        "fluid_resuscitation": {"status": "not_indicated", "time": None, "volume_ml": None},
+        "vasopressors": {"status": "not_indicated", "time": None, "agent": None},
+        "repeat_lactate": {"status": "ordered", "time": None, "value": None}
+    },
+    
+    "ground_truth": {
+        "sepsis_confirmed": False,
+        "sepsis_onset_time": None,
+        "sepsis_source": "urinary",
+        "organism": "E. coli (pending)",
+        "organ_dysfunction": {},
+        "qsofa_score": 1,
+        "sofa_score": 1
+    }
+}
+
+
+# Watchlist Patient 2: Post-Procedure Fever (Borderline - Monitor Trends)
+PATIENT_WATCHLIST_PROCEDURE = {
+    "id": "DEMO-006",
+    "mrn": "MRN-2025-006",
+    "name": "Harold Thompson",
+    "age": 68,
+    "gender": "M",
+    "room": "3E-328",
+    "bed": "B",
+    "admission_date": "2025-11-23",
+    "admission_time": "14:00",
+    "attending_physician": "Dr. Lisa Park",
+    "primary_nurse": "RN Kevin Martinez",
+    "diagnosis": "Post-ERCP cholangitis, early presentation",
+    "chief_complaint": "RUQ pain, fever after ERCP procedure",
+    "risk_score": 44,  # Watchlist - borderline
+    "risk_level": "MODERATE",
+    "sirs_criteria": 2,
+    
+    "vitals": {
+        "current": {
+            "heart_rate": 94,
+            "blood_pressure": "112/68",
+            "respiratory_rate": 19,
+            "temperature": 38.3,
+            "spo2": 96,
+            "map": 83
+        },
+        "previous": {
+            "heart_rate": 82,
+            "blood_pressure": "122/75",
+            "respiratory_rate": 16,
+            "temperature": 37.2,
+            "spo2": 98,
+            "map": 91
+        }
+    },
+    
+    "labs": {
+        "current": {
+            "lactate": 1.6,
+            "wbc": 12.5,
+            "creatinine": 1.1,
+            "bilirubin": 2.8,  # Elevated - biliary
+            "platelets": 175,
+            "procalcitonin": 0.5,
+            "crp": 55,
+            "bun": 20,
+            "glucose": 142,
+            "potassium": 3.9,
+            "sodium": 138,
+            "hemoglobin": 12.8,
+            "ast": 85,
+            "alt": 72,
+            "alk_phos": 245
+        },
+        "previous": {
+            "lactate": 1.2,
+            "wbc": 9.2,
+            "creatinine": 1.0,
+            "bilirubin": 1.8,
+            "platelets": 195,
+            "procalcitonin": 0.2,
+            "crp": 25
+        }
+    },
+    
+    "devices": [
+        {"type": "Peripheral IV x2", "days": 3, "inserted": "2025-11-23"},
+        {"type": "Biliary stent", "days": 2, "inserted": "2025-11-24"}
+    ],
+    
+    "medications": [
+        {"name": "Piperacillin-Tazobactam", "dose": "3.375g", "route": "IV", "frequency": "Q6H", "start": "2025-11-25 20:00"},
+        {"name": "Ondansetron", "dose": "4mg", "route": "IV", "frequency": "Q8H PRN", "start": "2025-11-23 14:00"},
+        {"name": "Morphine", "dose": "2mg", "route": "IV", "frequency": "Q4H PRN", "start": "2025-11-23 14:00"},
+        {"name": "Metoprolol", "dose": "25mg", "route": "PO", "frequency": "BID", "start": "Home med"}
+    ],
+    
+    "notes": [
+        {"time": "07:30", "author": "RN Martinez", "note": "Fever spike to 38.3C overnight. Bilirubin up to 2.8. RUQ tenderness on exam. GI consulted - may need repeat ERCP if no improvement."},
+        {"time": "03:00", "author": "RN Martinez", "note": "Patient with rigors, temp 38.1C. Blood cultures x2 drawn. Zosyn started per GI."},
+        {"time": "18:00", "author": "RN Johnson", "note": "Post-ERCP day 1. Stent placed for CBD stone. Tolerating clears. Mild RUQ discomfort."}
+    ],
+    
+    "problem_list": [
+        {"problem": "Choledocholithiasis", "status": "Active", "onset": "2025-11-23"},
+        {"problem": "Post-ERCP cholangitis", "status": "Active", "onset": "2025-11-25"},
+        {"problem": "Atrial fibrillation", "status": "Chronic", "onset": "2019"},
+        {"problem": "Hyperlipidemia", "status": "Chronic", "onset": "2010"}
+    ],
+    
+    "allergies": [],
+    
+    "sepsis_bundle": {
+        "lactate_measured": {"status": "complete", "time": "2025-11-26 04:00", "value": 1.6},
+        "blood_cultures": {"status": "complete", "time": "2025-11-26 03:00", "result": "Pending"},
+        "antibiotics": {"status": "complete", "time": "2025-11-25 20:00", "within_1hr": True},
+        "fluid_resuscitation": {"status": "not_indicated", "time": None, "volume_ml": None},
+        "vasopressors": {"status": "not_indicated", "time": None, "agent": None},
+        "repeat_lactate": {"status": "ordered", "time": None, "value": None}
+    },
+    
+    "ground_truth": {
+        "sepsis_confirmed": False,
+        "sepsis_onset_time": None,
+        "sepsis_source": "biliary",
+        "organism": "Unknown (pending)",
+        "organ_dysfunction": {},
+        "qsofa_score": 0,
+        "sofa_score": 1
+    }
+}
+
+
 # Export all featured patients
 FEATURED_PATIENTS = [
     PATIENT_UTI_SEPTIC_SHOCK,
     PATIENT_PNEUMONIA_SEPSIS,
     PATIENT_NEC_FASC,
-    PATIENT_POSTOP_ABDOMINAL
+    PATIENT_POSTOP_ABDOMINAL,
+    PATIENT_WATCHLIST_UTI,
+    PATIENT_WATCHLIST_PROCEDURE
 ]
 
 
@@ -717,7 +947,9 @@ def get_featured_patients_with_history():
         "DEMO-001": "septic_shock",      # Eleanor Martinez - Urosepsis with septic shock
         "DEMO-002": "pneumonia",          # Robert Thompson - Severe CAP with sepsis
         "DEMO-003": "necrotizing_fasciitis",  # William Chen - Necrotizing fasciitis
-        "DEMO-004": "post_op"             # Margaret O'Brien - Post-op (watchlist)
+        "DEMO-004": "post_op",            # Margaret O'Brien - Post-op (watchlist)
+        "DEMO-005": "general",            # Patricia Williams - UTI watchlist
+        "DEMO-006": "general"             # Harold Thompson - Post-ERCP watchlist
     }
     
     for patient in FEATURED_PATIENTS:

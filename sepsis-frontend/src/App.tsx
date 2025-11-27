@@ -125,6 +125,11 @@ function App() {
   const [monteCarloPathways, setMonteCarloPathways] = useState<any>(null)
   const [selectedPathway, setSelectedPathway] = useState<number>(0)
   const [loadingMonteCarlo, setLoadingMonteCarlo] = useState(false)
+  const [comprehensiveData, setComprehensiveData] = useState<any>(null)
+  const [multiAgentAnalysis, setMultiAgentAnalysis] = useState<any>(null)
+  const [loadingComprehensive, setLoadingComprehensive] = useState(false)
+  const [loadingMultiAgent, setLoadingMultiAgent] = useState(false)
+  const [activeParamCategory, setActiveParamCategory] = useState<string>('vitals')
   const chatEndRef = useRef<HTMLDivElement>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
@@ -588,10 +593,15 @@ function App() {
     setWhatIfPrediction(null)
     setMonteCarloPathways(null)
     setSelectedPathway(0)
+    setComprehensiveData(null)
+    setMultiAgentAnalysis(null)
+    setActiveParamCategory('vitals')
     setLoadingHistory(true)
     setLoadingAnalysis(true)
     setLoadingGameChangers(true)
     setLoadingMonteCarlo(true)
+    setLoadingComprehensive(true)
+    setLoadingMultiAgent(true)
 
     try {
       const historyResponse = await fetch(`${API_URL}/api/patients/${patient.id}/history`, {
@@ -665,6 +675,30 @@ function App() {
     } catch (error) {
       console.error('Error fetching Monte Carlo pathways:', error)
       setLoadingMonteCarlo(false)
+    }
+
+    try {
+      const comprehensiveRes = await fetch(`${API_URL}/api/patients/${patient.id}/comprehensive-data`, {
+        headers: getAuthHeaders()
+      })
+      const comprehensiveDataResult = await comprehensiveRes.json()
+      setComprehensiveData(comprehensiveDataResult)
+      setLoadingComprehensive(false)
+    } catch (error) {
+      console.error('Error fetching comprehensive data:', error)
+      setLoadingComprehensive(false)
+    }
+
+    try {
+      const multiAgentRes = await fetch(`${API_URL}/api/patients/${patient.id}/multi-agent-analysis`, {
+        headers: getAuthHeaders()
+      })
+      const multiAgentData = await multiAgentRes.json()
+      setMultiAgentAnalysis(multiAgentData)
+      setLoadingMultiAgent(false)
+    } catch (error) {
+      console.error('Error fetching multi-agent analysis:', error)
+      setLoadingMultiAgent(false)
     }
   }
 
@@ -3016,6 +3050,218 @@ function App() {
                     )}
                   </>
                 )}
+
+                {/* Comprehensive Clinical Data - 150+ Parameters */}
+                <div className="border-t border-gray-700 pt-4">
+                  <div className="flex items-center space-x-2 mb-3">
+                    <Beaker className="w-5 h-5 text-emerald-400" />
+                    <h3 className="text-sm font-semibold text-white">Comprehensive Clinical Data (150+ Parameters)</h3>
+                  </div>
+                  
+                  {loadingComprehensive ? (
+                    <div className="space-y-3">
+                      <Skeleton className="h-10 w-full bg-gray-700 rounded-lg" />
+                      <Skeleton className="h-40 w-full bg-gray-700 rounded-lg" />
+                    </div>
+                  ) : comprehensiveData ? (
+                    <div className="bg-slate-900/70 border border-slate-600 rounded-lg p-4">
+                      <div className="flex flex-wrap gap-2 mb-4">
+                        {['vitals', 'cbc', 'metabolic', 'coagulation', 'abg', 'inflammatory', 'cardiac', 'renal', 'scores', 'microbiology', 'imaging', 'interventions'].map((cat) => (
+                          <button
+                            key={cat}
+                            onClick={() => setActiveParamCategory(cat)}
+                            className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                              activeParamCategory === cat
+                                ? 'bg-emerald-600 text-white'
+                                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                            }`}
+                          >
+                            {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                          </button>
+                        ))}
+                      </div>
+                      
+                      <div className="max-h-64 overflow-y-auto">
+                        {comprehensiveData.current_parameters && comprehensiveData.current_parameters[activeParamCategory] ? (
+                          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                            {Object.entries(comprehensiveData.current_parameters[activeParamCategory]).map(([key, value]: [string, any]) => (
+                              <div key={key} className="p-2 bg-gray-800/50 rounded border border-gray-700">
+                                <div className="text-xs text-gray-400 truncate">{key.replace(/_/g, ' ')}</div>
+                                <div className="text-sm font-semibold text-white">
+                                  {typeof value === 'number' ? value.toFixed(2) : String(value)}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-xs text-gray-400 text-center py-4">
+                            No data available for {activeParamCategory}
+                          </div>
+                        )}
+                      </div>
+                      
+                      {comprehensiveData.archetype && (
+                        <div className="mt-4 p-3 bg-purple-950/30 border border-purple-600/40 rounded">
+                          <div className="text-xs text-purple-300 font-semibold mb-1">Patient Archetype</div>
+                          <div className="text-sm text-white">{comprehensiveData.archetype.replace(/_/g, ' ')}</div>
+                          {comprehensiveData.archetype_description && (
+                            <div className="text-xs text-gray-300 mt-1">{comprehensiveData.archetype_description}</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-gray-400 text-center py-4">
+                      No comprehensive data available
+                    </div>
+                  )}
+                </div>
+
+                {/* Multi-Agent Analysis Results */}
+                <div className="border-t border-gray-700 pt-4">
+                  <div className="flex items-center space-x-2 mb-3">
+                    <Brain className="w-5 h-5 text-cyan-400" />
+                    <h3 className="text-sm font-semibold text-white">Multi-Agent Deep Analysis</h3>
+                  </div>
+                  
+                  {loadingMultiAgent ? (
+                    <div className="space-y-3">
+                      <Skeleton className="h-20 w-full bg-gray-700 rounded-lg" />
+                      <Skeleton className="h-20 w-full bg-gray-700 rounded-lg" />
+                    </div>
+                  ) : multiAgentAnalysis ? (
+                    <div className="bg-slate-900/70 border border-slate-600 rounded-lg p-4 space-y-4">
+                      {/* Overall Assessment */}
+                      <div className="p-3 bg-gray-800/50 rounded border border-gray-700">
+                        <div className="text-xs text-gray-400 mb-1">Overall Assessment</div>
+                        <div className="text-sm text-white">{multiAgentAnalysis.overall_assessment}</div>
+                      </div>
+                      
+                      {/* Key Metrics */}
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="p-2 bg-gray-800/50 rounded border border-gray-700 text-center">
+                          <div className="text-xs text-gray-400">Sepsis Trajectory</div>
+                          <div className={`text-sm font-bold ${
+                            multiAgentAnalysis.sepsis_trajectory === 'worsening' ? 'text-red-400' :
+                            multiAgentAnalysis.sepsis_trajectory === 'improving' ? 'text-green-400' : 'text-yellow-400'
+                          }`}>
+                            {multiAgentAnalysis.sepsis_trajectory}
+                          </div>
+                        </div>
+                        <div className="p-2 bg-gray-800/50 rounded border border-gray-700 text-center">
+                          <div className="text-xs text-gray-400">Mortality Risk</div>
+                          <div className={`text-sm font-bold ${
+                            multiAgentAnalysis.mortality_risk === 'very_high' || multiAgentAnalysis.mortality_risk === 'high' ? 'text-red-400' :
+                            multiAgentAnalysis.mortality_risk === 'moderate' ? 'text-yellow-400' : 'text-green-400'
+                          }`}>
+                            {multiAgentAnalysis.mortality_risk?.replace(/_/g, ' ')}
+                          </div>
+                        </div>
+                        <div className="p-2 bg-gray-800/50 rounded border border-gray-700 text-center">
+                          <div className="text-xs text-gray-400">Confidence</div>
+                          <div className="text-sm font-bold text-cyan-400">
+                            {Math.round((multiAgentAnalysis.confidence_score || 0) * 100)}%
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Primary Concerns */}
+                      {multiAgentAnalysis.primary_concerns && multiAgentAnalysis.primary_concerns.length > 0 && (
+                        <div>
+                          <div className="text-xs text-gray-400 mb-2">Primary Concerns</div>
+                          <div className="space-y-1">
+                            {multiAgentAnalysis.primary_concerns.map((concern: string, idx: number) => (
+                              <div key={idx} className="text-xs text-red-300 flex items-start">
+                                <span className="mr-2">•</span>
+                                <span>{concern}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Agent Findings */}
+                      {multiAgentAnalysis.agent_findings && multiAgentAnalysis.agent_findings.length > 0 && (
+                        <div>
+                          <div className="text-xs text-gray-400 mb-2">Specialized Agent Findings</div>
+                          <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                            {multiAgentAnalysis.agent_findings.map((finding: any, idx: number) => (
+                              <div key={idx} className={`p-2 rounded border ${
+                                finding.overall_risk === 'critical' ? 'bg-red-950/30 border-red-600/40' :
+                                finding.overall_risk === 'high' ? 'bg-orange-950/30 border-orange-600/40' :
+                                finding.overall_risk === 'moderate' ? 'bg-yellow-950/30 border-yellow-600/40' :
+                                'bg-green-950/30 border-green-600/40'
+                              }`}>
+                                <div className="flex items-center justify-between mb-1">
+                                  <div className="text-xs font-semibold text-white">{finding.agent_name}</div>
+                                  <div className={`text-xs px-1.5 py-0.5 rounded ${
+                                    finding.overall_risk === 'critical' ? 'bg-red-600 text-white' :
+                                    finding.overall_risk === 'high' ? 'bg-orange-600 text-white' :
+                                    finding.overall_risk === 'moderate' ? 'bg-yellow-600 text-black' :
+                                    'bg-green-600 text-white'
+                                  }`}>
+                                    {finding.overall_risk}
+                                  </div>
+                                </div>
+                                <div className="text-xs text-gray-300 line-clamp-2">{finding.summary}</div>
+                                {finding.confidence && (
+                                  <div className="text-xs text-gray-500 mt-1">Confidence: {Math.round(finding.confidence * 100)}%</div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Cross-System Correlations */}
+                      {multiAgentAnalysis.cross_system_correlations && multiAgentAnalysis.cross_system_correlations.length > 0 && (
+                        <div>
+                          <div className="text-xs text-gray-400 mb-2">Cross-System Correlations</div>
+                          <div className="space-y-2">
+                            {multiAgentAnalysis.cross_system_correlations.map((corr: any, idx: number) => (
+                              <div key={idx} className="p-2 bg-purple-950/30 border border-purple-600/40 rounded">
+                                <div className="flex items-center justify-between mb-1">
+                                  <div className="text-xs font-semibold text-purple-300">{corr.pattern_name}</div>
+                                  <div className={`text-xs px-1.5 py-0.5 rounded ${
+                                    corr.severity === 'critical' ? 'bg-red-600 text-white' :
+                                    corr.severity === 'high' ? 'bg-orange-600 text-white' : 'bg-yellow-600 text-black'
+                                  }`}>
+                                    {corr.severity}
+                                  </div>
+                                </div>
+                                <div className="text-xs text-gray-300">{corr.clinical_interpretation}</div>
+                                {corr.involved_systems && (
+                                  <div className="text-xs text-gray-500 mt-1">
+                                    Systems: {corr.involved_systems.join(', ')}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Recommended Actions */}
+                      {multiAgentAnalysis.recommended_actions && multiAgentAnalysis.recommended_actions.length > 0 && (
+                        <div>
+                          <div className="text-xs text-gray-400 mb-2">Recommended Actions</div>
+                          <div className="space-y-1">
+                            {multiAgentAnalysis.recommended_actions.map((action: string, idx: number) => (
+                              <div key={idx} className="text-xs text-emerald-300 flex items-start">
+                                <span className="mr-2">{idx + 1}.</span>
+                                <span>{action}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-gray-400 text-center py-4">
+                      No multi-agent analysis available
+                    </div>
+                  )}
+                </div>
 
                 <div className="flex space-x-3">
                   <Button
