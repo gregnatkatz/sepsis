@@ -41,6 +41,16 @@ The patient detail view provides 150+ clinical parameters organized by category,
 
 ![Patient Detail with AI Insights](screenshots/patient_detail_with_ai.png)
 
+**3. Explain My Alert and Sepsis Bundle Timeline**
+
+Two new nurse-focused features make the AI reasoning transparent and actionable:
+
+- **Explain My Alert**: Shows why a patient is on the worklist with a nurse-friendly headline, key findings with concern levels, and agent agreement badges showing consensus across all 8 specialized agents. Includes recommended actions for immediate nursing intervention.
+
+- **Sepsis Bundle Timeline**: Visual 1-hour bundle tracker showing status of all 6 bundle tasks (lactate measurement, blood cultures, antibiotics, fluid resuscitation, vasopressors, repeat lactate) with completion times and compliance percentage.
+
+![Explain My Alert and Bundle Timeline](screenshots/explain_my_alert_bundle_timeline.png)
+
 **3. Learning from Experience**
 
 The RL Analytics tab shows how treatment policies evolve over time, with Monte Carlo simulation (500 samples per pathway) predicting outcomes for different intervention strategies. This enables data-driven treatment optimization rather than relying solely on clinical intuition.
