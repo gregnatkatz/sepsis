@@ -2503,6 +2503,305 @@ Provide overall EWS score, trend, agent evidence, conflicts, and recommended act
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/patients/{patient_id}/alert-explanation")
+async def get_alert_explanation(patient_id: str, db: AsyncSession = Depends(get_db)):
+    """
+    Nurse-friendly alert explanation synthesizing multi-agent outputs.
+    Returns a clear explanation of why the patient is on the worklist with agent agreement badges.
+    """
+    patient = await get_patient_from_db(patient_id, db)
+    if not patient:
+        patient = next((p for p in MOCK_PATIENTS if p["id"] == patient_id), None)
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    
+    # Get patient data
+    vitals = patient['vitals']['current']
+    labs = patient['labs']['current']
+    bp_parts = vitals['blood_pressure'].split('/')
+    map_pressure = (int(bp_parts[0]) + 2 * int(bp_parts[1])) / 3
+    ground_truth = patient.get('ground_truth', {})
+    
+    # Check if patient meets worklist criteria
+    risk_score = patient['risk_score']
+    sirs = patient['sirs_criteria']
+    lactate = labs['lactate']
+    
+    from app.risk_logic import is_patient_high_risk, get_risk_reason
+    is_high_risk = is_patient_high_risk(patient)
+    risk_reason = get_risk_reason(patient)
+    
+    system_prompt = """You are a clinical decision support system explaining sepsis alerts to nurses.
+    Generate a clear, nurse-friendly explanation of why this patient triggered an alert.
+    
+    Return ONLY valid JSON matching this exact schema:
+    {
+      "headline": "One-line summary for the alert (e.g., 'Septic shock with multi-organ involvement')",
+      "on_worklist_because": "Clear explanation of why patient is on worklist using Smart Logic criteria",
+      "key_findings": [
+        {"finding": "Finding description", "value": "Current value", "concern_level": "critical|high|moderate|low"}
+      ],
+      "agent_agreement": {
+        "total_agents": 8,
+        "agreeing_agents": 0-8,
+        "consensus": "unanimous|strong|moderate|split",
+        "agent_votes": [
+          {"agent": "Agent name", "assessment": "critical|concerning|stable", "confidence": 0.0-1.0, "key_reason": "Brief reason"}
+        ]
+      },
+      "trend_summary": "Brief description of how patient is trending (improving/worsening/stable)",
+      "immediate_concerns": ["Concern 1", "Concern 2"],
+      "nurse_actions": ["Action 1", "Action 2", "Action 3"]
+    }
+    
+    Guidelines:
+    - Use plain language a bedside nurse would understand
+    - Be specific about values and thresholds
+    - Highlight the most critical findings first
+    - Agent votes should reflect analysis of different clinical domains
+    - Nurse actions should be concrete and actionable"""
+    
+    user_prompt = f"""Generate a nurse-friendly alert explanation for this patient:
+
+Patient: {patient['name']}, {patient['age']}y {patient['gender']} in {patient['room']}
+Diagnosis: {patient['diagnosis']}
+Admission: {patient.get('admission_time', 'Unknown')}
+
+ALERT STATUS: {'ON WORKLIST (HIGH PRIORITY)' if is_high_risk else 'WATCHLIST (MONITORING)'}
+Smart Logic Reason: {risk_reason}
+
+Current Risk Assessment:
+- Risk Score: {risk_score}/100 ({patient['risk_level']} RISK)
+- SIRS Criteria: {sirs}/4
+- qSOFA Score: {ground_truth.get('qsofa_score', 'N/A')}
+- SOFA Score: {ground_truth.get('sofa_score', 'N/A')}
+
+Current Vitals:
+- HR: {vitals['heart_rate']} bpm (normal: 60-100)
+- RR: {vitals['respiratory_rate']} (normal: 12-20)
+- BP: {vitals['blood_pressure']} (MAP: {map_pressure:.0f} mmHg)
+- SpO2: {vitals['spo2']}% (normal: >94%)
+- Temp: {vitals['temperature']}°C (normal: 36.5-37.5)
+
+Current Labs:
+- WBC: {labs['wbc']} K/µL (normal: 4.5-11.0)
+- Lactate: {labs['lactate']} mmol/L (normal: <2.0)
+- Creatinine: {labs.get('creatinine', 'N/A')} mg/dL
+
+Devices: {', '.join([d['type'] + f" (Day {d['days']})" for d in patient['devices']])}
+
+Generate explanation with:
+1. Clear headline summarizing the alert
+2. Why patient is on worklist (using Smart Logic: Risk >= 60 OR (Risk >= 50 AND (SIRS >= 3 OR Lactate > 2.0)))
+3. Key findings with concern levels
+4. Agent agreement (8 agents: Vitals, Hematology, Metabolic, Coagulation, ABG, Inflammatory, Cardiac, Microbiology)
+5. Trend summary
+6. Immediate concerns
+7. Specific nurse actions"""
+
+    try:
+        response = client.chat.completions.create(
+            model=os.getenv("AZURE_OPENAI_DEPLOYMENT_GPT41", "gpt-4.1"),
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.3,
+            max_tokens=1500,
+            response_format={"type": "json_object"}
+        )
+        
+        content = response.choices[0].message.content
+        explanation_data = json.loads(content)
+        
+        return {
+            "patient_id": patient_id,
+            "patient_name": patient['name'],
+            "risk_score": risk_score,
+            "risk_level": patient['risk_level'],
+            "sirs_criteria": sirs,
+            "lactate": lactate,
+            "is_on_worklist": is_high_risk,
+            "smart_logic_reason": risk_reason,
+            "generated_at": datetime.utcnow().isoformat() + "Z",
+            **explanation_data
+        }
+    except json.JSONDecodeError as e:
+        # Fallback response
+        return {
+            "patient_id": patient_id,
+            "patient_name": patient['name'],
+            "risk_score": risk_score,
+            "risk_level": patient['risk_level'],
+            "sirs_criteria": sirs,
+            "lactate": lactate,
+            "is_on_worklist": is_high_risk,
+            "smart_logic_reason": risk_reason,
+            "headline": f"{patient['risk_level']} risk patient requiring attention",
+            "on_worklist_because": risk_reason,
+            "key_findings": [
+                {"finding": "Risk Score", "value": f"{risk_score}/100", "concern_level": "high" if risk_score >= 60 else "moderate"},
+                {"finding": "SIRS Criteria", "value": f"{sirs}/4", "concern_level": "high" if sirs >= 3 else "moderate"},
+                {"finding": "Lactate", "value": f"{lactate} mmol/L", "concern_level": "high" if lactate > 2.0 else "moderate"}
+            ],
+            "agent_agreement": {
+                "total_agents": 8,
+                "agreeing_agents": 6,
+                "consensus": "strong",
+                "agent_votes": []
+            },
+            "trend_summary": "Unable to generate detailed trend analysis",
+            "immediate_concerns": ["Continue monitoring", "Review sepsis bundle status"],
+            "nurse_actions": ["Assess patient", "Review vital signs", "Check sepsis bundle compliance"],
+            "generated_at": datetime.utcnow().isoformat() + "Z"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/patients/{patient_id}/sepsis-bundle-timeline")
+async def get_sepsis_bundle_timeline(patient_id: str, db: AsyncSession = Depends(get_db)):
+    """
+    Get sepsis bundle timeline with status for each task.
+    Returns bundle tasks with done/due/overdue status for the 1-hour sepsis bundle.
+    """
+    patient = await get_patient_from_db(patient_id, db)
+    if not patient:
+        patient = next((p for p in MOCK_PATIENTS if p["id"] == patient_id), None)
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    
+    # Get sepsis bundle data from featured patients
+    from featured_patients import FEATURED_PATIENTS
+    featured = next((p for p in FEATURED_PATIENTS if p["id"] == patient_id), None)
+    
+    bundle_data = None
+    if featured and "sepsis_bundle" in featured:
+        bundle_data = featured["sepsis_bundle"]
+    elif "sepsis_bundle" in patient:
+        bundle_data = patient["sepsis_bundle"]
+    
+    # Define the 1-hour sepsis bundle tasks
+    bundle_tasks = [
+        {
+            "task_id": "lactate_measured",
+            "task_name": "Measure Lactate",
+            "description": "Initial lactate measurement",
+            "target_time_minutes": 30,
+            "icon": "beaker",
+            "order": 1
+        },
+        {
+            "task_id": "blood_cultures",
+            "task_name": "Blood Cultures",
+            "description": "Obtain blood cultures before antibiotics",
+            "target_time_minutes": 45,
+            "icon": "test-tube",
+            "order": 2
+        },
+        {
+            "task_id": "antibiotics",
+            "task_name": "Broad-Spectrum Antibiotics",
+            "description": "Administer antibiotics within 1 hour",
+            "target_time_minutes": 60,
+            "icon": "pill",
+            "order": 3
+        },
+        {
+            "task_id": "fluid_resuscitation",
+            "task_name": "Fluid Resuscitation",
+            "description": "30 mL/kg crystalloid for hypotension or lactate >= 4",
+            "target_time_minutes": 60,
+            "icon": "droplet",
+            "order": 4
+        },
+        {
+            "task_id": "vasopressors",
+            "task_name": "Vasopressors",
+            "description": "If hypotensive after fluids (MAP < 65)",
+            "target_time_minutes": 90,
+            "icon": "activity",
+            "order": 5
+        },
+        {
+            "task_id": "repeat_lactate",
+            "task_name": "Repeat Lactate",
+            "description": "Re-measure lactate if initial > 2 mmol/L",
+            "target_time_minutes": 360,
+            "icon": "refresh-cw",
+            "order": 6
+        }
+    ]
+    
+    # Build timeline with status
+    timeline = []
+    completed_count = 0
+    
+    for task in bundle_tasks:
+        task_id = task["task_id"]
+        task_data = bundle_data.get(task_id, {}) if bundle_data else {}
+        
+        status = task_data.get("status", "pending")
+        completion_time = task_data.get("time")
+        
+        # Determine display status
+        if status == "complete":
+            display_status = "done"
+            completed_count += 1
+        elif status == "in_progress":
+            display_status = "in_progress"
+        elif status == "not_indicated":
+            display_status = "not_indicated"
+            completed_count += 1  # Count as "done" for compliance
+        elif status == "on_prophylaxis":
+            display_status = "done"
+            completed_count += 1
+        elif status == "ordered":
+            display_status = "ordered"
+        else:
+            display_status = "pending"
+        
+        # Get additional details based on task type
+        details = {}
+        if task_id == "lactate_measured" and "value" in task_data:
+            details["value"] = f"{task_data['value']} mmol/L"
+        elif task_id == "blood_cultures" and "result" in task_data:
+            details["result"] = task_data["result"]
+        elif task_id == "antibiotics" and "within_1hr" in task_data:
+            details["within_1hr"] = task_data["within_1hr"]
+        elif task_id == "fluid_resuscitation" and "volume_ml" in task_data:
+            details["volume"] = f"{task_data['volume_ml']} mL"
+        elif task_id == "vasopressors" and "agent" in task_data:
+            details["agent"] = task_data["agent"]
+        elif task_id == "repeat_lactate" and "value" in task_data:
+            details["value"] = f"{task_data['value']} mmol/L"
+        
+        timeline.append({
+            **task,
+            "status": display_status,
+            "completion_time": completion_time,
+            "details": details
+        })
+    
+    # Calculate compliance
+    total_applicable = sum(1 for t in timeline if t["status"] != "not_indicated")
+    compliance_pct = (completed_count / len(bundle_tasks)) * 100 if bundle_tasks else 0
+    
+    return {
+        "patient_id": patient_id,
+        "patient_name": patient['name'],
+        "bundle_start_time": bundle_data.get("lactate_measured", {}).get("time") if bundle_data else None,
+        "timeline": timeline,
+        "summary": {
+            "total_tasks": len(bundle_tasks),
+            "completed": completed_count,
+            "pending": len(bundle_tasks) - completed_count,
+            "compliance_percentage": round(compliance_pct, 1)
+        },
+        "generated_at": datetime.utcnow().isoformat() + "Z"
+    }
+
+
 @app.websocket("/api/realtime")
 async def realtime_websocket(websocket: WebSocket):
     await websocket.accept()

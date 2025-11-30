@@ -130,6 +130,10 @@ function App() {
   const [loadingComprehensive, setLoadingComprehensive] = useState(false)
   const [loadingMultiAgent, setLoadingMultiAgent] = useState(false)
   const [activeParamCategory, setActiveParamCategory] = useState<string>('vitals')
+  const [alertExplanation, setAlertExplanation] = useState<any>(null)
+  const [bundleTimeline, setBundleTimeline] = useState<any>(null)
+  const [loadingAlertExplanation, setLoadingAlertExplanation] = useState(false)
+  const [loadingBundleTimeline, setLoadingBundleTimeline] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
@@ -596,12 +600,16 @@ function App() {
     setComprehensiveData(null)
     setMultiAgentAnalysis(null)
     setActiveParamCategory('vitals')
+    setAlertExplanation(null)
+    setBundleTimeline(null)
     setLoadingHistory(true)
     setLoadingAnalysis(true)
     setLoadingGameChangers(true)
     setLoadingMonteCarlo(true)
     setLoadingComprehensive(true)
     setLoadingMultiAgent(true)
+    setLoadingAlertExplanation(true)
+    setLoadingBundleTimeline(true)
 
     try {
       const historyResponse = await fetch(`${API_URL}/api/patients/${patient.id}/history`, {
@@ -699,6 +707,30 @@ function App() {
     } catch (error) {
       console.error('Error fetching multi-agent analysis:', error)
       setLoadingMultiAgent(false)
+    }
+
+    try {
+      const alertExplanationRes = await fetch(`${API_URL}/api/patients/${patient.id}/alert-explanation`, {
+        headers: getAuthHeaders()
+      })
+      const alertExplanationData = await alertExplanationRes.json()
+      setAlertExplanation(alertExplanationData)
+      setLoadingAlertExplanation(false)
+    } catch (error) {
+      console.error('Error fetching alert explanation:', error)
+      setLoadingAlertExplanation(false)
+    }
+
+    try {
+      const bundleTimelineRes = await fetch(`${API_URL}/api/patients/${patient.id}/sepsis-bundle-timeline`, {
+        headers: getAuthHeaders()
+      })
+      const bundleTimelineData = await bundleTimelineRes.json()
+      setBundleTimeline(bundleTimelineData)
+      setLoadingBundleTimeline(false)
+    } catch (error) {
+      console.error('Error fetching bundle timeline:', error)
+      setLoadingBundleTimeline(false)
     }
   }
 
@@ -2370,6 +2402,180 @@ function App() {
                       </CardContent>
                     </Card>
                   </div>
+                </div>
+
+                {/* Explain My Alert Card */}
+                <div>
+                  <div className="flex items-center space-x-2 mb-3">
+                    <AlertTriangle className="w-5 h-5 text-amber-400" />
+                    <h3 className="text-sm font-semibold text-white">Explain My Alert</h3>
+                  </div>
+                  
+                  {loadingAlertExplanation ? (
+                    <Skeleton className="h-40 w-full bg-gray-700 rounded-lg" />
+                  ) : alertExplanation ? (
+                    <div className="bg-slate-900/70 border border-slate-600 rounded-lg p-4 space-y-4">
+                      <div className="border-b border-gray-700 pb-3">
+                        <h4 className="text-lg font-bold text-white mb-2">{alertExplanation.headline}</h4>
+                        <p className="text-sm text-gray-300">{alertExplanation.on_worklist_because}</p>
+                      </div>
+                      
+                      {alertExplanation.key_findings && alertExplanation.key_findings.length > 0 && (
+                        <div>
+                          <h5 className="text-xs font-semibold text-gray-400 mb-2">Key Findings</h5>
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                            {alertExplanation.key_findings.slice(0, 6).map((finding: any, idx: number) => {
+                              const concernColors: Record<string, string> = {
+                                critical: 'bg-red-900/50 border-red-600/40 text-red-300',
+                                high: 'bg-orange-900/50 border-orange-600/40 text-orange-300',
+                                moderate: 'bg-amber-900/50 border-amber-600/40 text-amber-300',
+                                low: 'bg-green-900/50 border-green-600/40 text-green-300'
+                              }
+                              const colorClass = concernColors[finding.concern_level] || concernColors.moderate
+                              return (
+                                <div key={idx} className={`rounded border p-2 ${colorClass}`}>
+                                  <div className="text-xs opacity-80">{finding.finding}</div>
+                                  <div className="text-sm font-semibold">{finding.value}</div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {alertExplanation.agent_agreement && (
+                        <div>
+                          <h5 className="text-xs font-semibold text-gray-400 mb-2">
+                            Agent Agreement: <span className={`ml-1 ${
+                              alertExplanation.agent_agreement.consensus === 'unanimous' ? 'text-green-400' :
+                              alertExplanation.agent_agreement.consensus === 'strong' ? 'text-blue-400' :
+                              alertExplanation.agent_agreement.consensus === 'moderate' ? 'text-amber-400' : 'text-red-400'
+                            }`}>
+                              {alertExplanation.agent_agreement.agreeing_agents}/{alertExplanation.agent_agreement.total_agents} agents agree ({alertExplanation.agent_agreement.consensus})
+                            </span>
+                          </h5>
+                          <div className="flex flex-wrap gap-1">
+                            {alertExplanation.agent_agreement.agent_votes?.map((vote: any, idx: number) => {
+                              const assessmentColors: Record<string, string> = {
+                                critical: 'bg-red-600',
+                                concerning: 'bg-orange-600',
+                                elevated: 'bg-amber-600',
+                                normal: 'bg-green-600',
+                                stable: 'bg-blue-600'
+                              }
+                              const bgColor = assessmentColors[vote.assessment] || 'bg-gray-600'
+                              return (
+                                <div key={idx} className={`${bgColor} text-white text-xs px-2 py-1 rounded-full flex items-center gap-1`} title={vote.key_reason}>
+                                  <span>{vote.agent}</span>
+                                  <span className="opacity-70">({Math.round(vote.confidence * 100)}%)</span>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {alertExplanation.nurse_actions && alertExplanation.nurse_actions.length > 0 && (
+                        <div className="border-t border-gray-700 pt-3">
+                          <h5 className="text-xs font-semibold text-gray-400 mb-2">Recommended Actions</h5>
+                          <ul className="space-y-1">
+                            {alertExplanation.nurse_actions.map((action: string, idx: number) => (
+                              <li key={idx} className="text-sm text-gray-300 flex items-start gap-2">
+                                <CheckCircle2 className="w-4 h-4 text-green-400 mt-0.5 flex-shrink-0" />
+                                {action}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">No alert explanation available</p>
+                  )}
+                </div>
+
+                {/* Sepsis Bundle Timeline Panel */}
+                <div>
+                  <div className="flex items-center space-x-2 mb-3">
+                    <Clock className="w-5 h-5 text-cyan-400" />
+                    <h3 className="text-sm font-semibold text-white">Sepsis Bundle Timeline</h3>
+                  </div>
+                  
+                  {loadingBundleTimeline ? (
+                    <Skeleton className="h-40 w-full bg-gray-700 rounded-lg" />
+                  ) : bundleTimeline && bundleTimeline.timeline ? (
+                    <div className="bg-slate-900/70 border border-slate-600 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="text-sm">
+                          <span className="text-gray-400">Bundle Compliance:</span>
+                          <span className={`ml-2 font-bold ${
+                            bundleTimeline.summary?.compliance_percentage >= 80 ? 'text-green-400' :
+                            bundleTimeline.summary?.compliance_percentage >= 50 ? 'text-amber-400' : 'text-red-400'
+                          }`}>
+                            {bundleTimeline.summary?.compliance_percentage?.toFixed(0) || 0}%
+                          </span>
+                        </div>
+                        <div className="text-sm">
+                          <span className="text-gray-400">Tasks:</span>
+                          <span className="ml-2 font-bold text-white">
+                            {bundleTimeline.summary?.completed || 0}/{bundleTimeline.summary?.total_tasks || 6}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-3">
+                        {bundleTimeline.timeline.map((task: any) => {
+                          const statusConfig: Record<string, { icon: any; color: string; bg: string }> = {
+                            done: { icon: CheckCircle2, color: 'text-green-400', bg: 'bg-green-900/30 border-green-600/40' },
+                            in_progress: { icon: Clock, color: 'text-blue-400', bg: 'bg-blue-900/30 border-blue-600/40' },
+                            pending: { icon: Clock, color: 'text-amber-400', bg: 'bg-amber-900/30 border-amber-600/40' },
+                            overdue: { icon: AlertTriangle, color: 'text-red-400', bg: 'bg-red-900/30 border-red-600/40' },
+                            not_indicated: { icon: Activity, color: 'text-gray-400', bg: 'bg-gray-800/50 border-gray-600/40' },
+                            ordered: { icon: Clock, color: 'text-purple-400', bg: 'bg-purple-900/30 border-purple-600/40' }
+                          }
+                          const config = statusConfig[task.status] || statusConfig.pending
+                          const StatusIcon = config.icon
+                          
+                          return (
+                            <div key={task.task_id} className={`rounded border p-3 ${config.bg}`}>
+                              <div className="flex items-start justify-between">
+                                <div className="flex items-start gap-3">
+                                  <StatusIcon className={`w-5 h-5 mt-0.5 ${config.color}`} />
+                                  <div>
+                                    <div className="text-sm font-semibold text-white">{task.task_name}</div>
+                                    <div className="text-xs text-gray-400">{task.description}</div>
+                                    {task.completion_time && (
+                                      <div className="text-xs text-gray-500 mt-1">
+                                        Completed: {new Date(task.completion_time).toLocaleTimeString()}
+                                      </div>
+                                    )}
+                                    {task.details && Object.keys(task.details).length > 0 && (
+                                      <div className="text-xs text-gray-400 mt-1">
+                                        {task.details.value && <span>Value: {task.details.value} | </span>}
+                                        {task.details.result && <span>Result: {task.details.result} | </span>}
+                                        {task.details.volume && <span>Volume: {task.details.volume} | </span>}
+                                        {task.details.agent && <span>Agent: {task.details.agent}</span>}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <div className={`text-xs px-2 py-1 rounded ${config.bg} ${config.color}`}>
+                                    {task.status.replace('_', ' ')}
+                                  </div>
+                                  <div className="text-xs text-gray-500 mt-1">
+                                    Target: {task.target_time_minutes} min
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">No bundle timeline available</p>
+                  )}
                 </div>
 
                 <div>
