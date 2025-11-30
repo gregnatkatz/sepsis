@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from mock_patients import MOCK_PATIENTS
+from featured_patients import FEATURED_PATIENTS, get_featured_patients_with_history
 from app.agui import create_agui_session, handle_agui_websocket
 from app.llm_client import get_llm_client, ModelType
 from app.database import (
@@ -32,6 +33,19 @@ from app.evaluation_agent import (
 from app.reports import get_trending_outcomes, get_pathway_adoption
 from app.synthetic_outcomes import generate_synthetic_outcomes, generate_pathway_adoption as generate_synthetic_pathway_adoption
 from app.validation_metrics import calculate_validation_metrics
+from app.risk_logic import (
+    is_patient_high_risk, get_risk_reason, classify_risk_level,
+    calculate_sepsis_stage, get_priority_score, get_patient_lactate, get_patient_sirs
+)
+from clinical_parameters import (
+    generate_patient_clinical_data, get_current_parameters, 
+    get_parameter_categories, ARCHETYPES, CLINICAL_PARAMETERS,
+    generate_lactate_clearance_curve
+)
+from app.multi_agent_analysis import (
+    run_multi_agent_analysis, clear_agent_cache,
+    AgentFinding, AggregatedAnalysis
+)
 
 load_dotenv()
 
@@ -152,7 +166,14 @@ async def get_patient_from_db(patient_id: str, db: AsyncSession) -> Optional[Dic
             "Pyelonephritis",
             "Cellulitis"
         ]
-        diagnosis_idx = int(patient_id.split('-')[1]) % len(diagnoses)
+        try:
+            parts = patient_id.split('-')
+            if len(parts) >= 2:
+                diagnosis_idx = int(parts[1]) % len(diagnoses)
+            else:
+                diagnosis_idx = hash(patient_id) % len(diagnoses)
+        except (ValueError, IndexError):
+            diagnosis_idx = hash(patient_id) % len(diagnoses)
         diagnosis = diagnoses[diagnosis_idx]
     else:
         diagnosis = "Sepsis monitoring"
@@ -240,6 +261,71 @@ async def get_patients(
             elif dataset == "synthetic" and "synthetic" not in cohort_tags:
                 continue
         
+        # Fetch latest vitals for this patient
+        vitals_result = await db.execute(
+            select(FactVitals)
+            .where(FactVitals.patient_id == p.id)
+            .order_by(FactVitals.timestamp.desc())
+            .limit(10)
+        )
+        vitals_rows = vitals_result.scalars().all()
+        vitals_dict = {v.vital_name: v.value for v in vitals_rows}
+        
+        # Fetch latest labs for this patient
+        labs_result = await db.execute(
+            select(FactLabs)
+            .where(FactLabs.patient_id == p.id)
+            .order_by(FactLabs.timestamp.desc())
+            .limit(10)
+        )
+        labs_rows = labs_result.scalars().all()
+        labs_dict = {l.lab_name: l.value for l in labs_rows}
+        
+        # Calculate blood pressure string
+        if "bp_systolic" in vitals_dict and "bp_diastolic" in vitals_dict:
+            blood_pressure = f"{int(vitals_dict['bp_systolic'])}/{int(vitals_dict['bp_diastolic'])}"
+        else:
+            blood_pressure = "120/80"
+        
+        # Calculate SIRS criteria
+        temp = vitals_dict.get("temp", 37.0)
+        hr = vitals_dict.get("hr", 70)
+        rr = vitals_dict.get("rr", 16)
+        wbc = labs_dict.get("wbc", 8.0)
+        
+        sirs_count = 0
+        if temp < 36 or temp > 38:
+            sirs_count += 1
+        if hr > 90:
+            sirs_count += 1
+        if rr > 20:
+            sirs_count += 1
+        if wbc < 4 or wbc > 12:
+            sirs_count += 1
+        
+        # Generate diagnosis based on patient ID for Kaggle patients
+        is_kaggle = "kaggle" in cohort_tags
+        if is_kaggle:
+            diagnoses = [
+                "Pneumonia with sepsis",
+                "Urinary tract infection",
+                "Abdominal sepsis",
+                "Skin and soft tissue infection",
+                "Bacteremia",
+                "Post-operative infection",
+                "Aspiration pneumonia",
+                "Cholecystitis",
+                "Pyelonephritis",
+                "Cellulitis"
+            ]
+            try:
+                diagnosis_idx = int(p.id.split('-')[1]) % len(diagnoses)
+            except:
+                diagnosis_idx = hash(p.id) % len(diagnoses)
+            diagnosis = diagnoses[diagnosis_idx]
+        else:
+            diagnosis = "Sepsis monitoring"
+        
         patient_summary = {
             "id": p.id,
             "mrn": p.mrn,
@@ -249,7 +335,27 @@ async def get_patients(
             "room": p.room,
             "risk_level": p.risk_level,
             "risk_score": p.risk_score,
-            "cohort_tags": cohort_tags
+            "cohort_tags": cohort_tags,
+            "sirs_criteria": sirs_count,
+            "diagnosis": diagnosis,
+            "vitals": {
+                "current": {
+                    "heart_rate": vitals_dict.get("hr", 70),
+                    "blood_pressure": blood_pressure,
+                    "respiratory_rate": vitals_dict.get("rr", 16),
+                    "temperature": vitals_dict.get("temp", 37.0),
+                    "spo2": vitals_dict.get("spo2", 98)
+                }
+            },
+            "labs": {
+                "current": {
+                    "wbc": labs_dict.get("wbc", 8.0),
+                    "lactate": labs_dict.get("lactate", 1.5),
+                    "creatinine": labs_dict.get("creatinine", 1.0),
+                    "bilirubin": labs_dict.get("bilirubin", 0.8),
+                    "platelets": labs_dict.get("platelets", 200)
+                }
+            }
         }
         patient_list.append(patient_summary)
     
@@ -439,8 +545,555 @@ async def analyze_patient(query: PatientQuery):
 
 @app.get("/api/high-risk-patients")
 async def get_high_risk_patients():
-    high_risk = [p for p in MOCK_PATIENTS if p["risk_score"] >= 60]
+    """Get high-risk patients using Smart Logic for improved PPV"""
+    high_risk = []
+    for p in MOCK_PATIENTS:
+        if is_patient_high_risk(p):
+            patient_data = {**p}
+            patient_data["risk_reason"] = get_risk_reason(p)
+            patient_data["smart_risk_level"] = classify_risk_level(p)
+            stage_name, stage_num = calculate_sepsis_stage(p)
+            patient_data["sepsis_stage"] = stage_name
+            patient_data["sepsis_stage_num"] = stage_num
+            patient_data["priority_score"] = get_priority_score(p)
+            high_risk.append(patient_data)
+    
+    # Sort by priority score (highest first)
+    high_risk.sort(key=lambda x: x["priority_score"], reverse=True)
     return {"patients": high_risk, "count": len(high_risk)}
+
+
+@app.get("/api/sepsis-worklist")
+async def get_sepsis_worklist():
+    """
+    Clinical Worklist: Prioritized list of patients requiring immediate attention.
+    Sorted by sepsis stage, risk score, and time since admission.
+    This is the primary view for nurses/clinicians to triage patients.
+    """
+    worklist = []
+    for p in MOCK_PATIENTS:
+        if is_patient_high_risk(p):
+            stage_name, stage_num = calculate_sepsis_stage(p)
+            sirs_count = get_patient_sirs(p)
+            lactate = get_patient_lactate(p)
+            
+            # Calculate hours since admission
+            admission_date = p.get("admission_date", "2025-11-14")
+            try:
+                admission_dt = datetime.strptime(admission_date, "%Y-%m-%d")
+                hours_since_admission = (datetime.now() - admission_dt).total_seconds() / 3600
+            except:
+                hours_since_admission = 48
+            
+            worklist_item = {
+                "id": p["id"],
+                "name": p["name"],
+                "mrn": p.get("mrn", ""),
+                "room": p.get("room", ""),
+                "age": p.get("age", 0),
+                "gender": p.get("gender", ""),
+                "diagnosis": p.get("diagnosis", ""),
+                "risk_score": p.get("risk_score", 0),
+                "risk_level": classify_risk_level(p),
+                "risk_reason": get_risk_reason(p),
+                "sepsis_stage": stage_name,
+                "sepsis_stage_num": stage_num,
+                "sirs_count": sirs_count,
+                "lactate": lactate,
+                "priority_score": get_priority_score(p),
+                "hours_since_admission": round(hours_since_admission, 1),
+                "devices": p.get("devices", []),
+                "vitals": p.get("vitals", {}).get("current", {}),
+                "labs": p.get("labs", {}).get("current", {}),
+                "notes": p.get("notes", [])[:2]  # Last 2 notes
+            }
+            worklist.append(worklist_item)
+    
+    # Sort by priority (sepsis stage desc, then risk score desc)
+    worklist.sort(key=lambda x: (x["sepsis_stage_num"], x["priority_score"]), reverse=True)
+    
+    return {
+        "worklist": worklist,
+        "count": len(worklist),
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+@app.get("/api/watchlist-patients")
+async def get_watchlist_patients():
+    """
+    Watchlist: Sub-threshold patients who need monitoring.
+    These are patients with moderate risk (40-49) who have concerning signs.
+    Nurses should check these patients regularly for deterioration.
+    """
+    watchlist = []
+    for p in MOCK_PATIENTS:
+        risk_score = p.get("risk_score", 0)
+        sirs_count = get_patient_sirs(p)
+        lactate = get_patient_lactate(p)
+        
+        # Watchlist criteria: moderate risk with some warning signs
+        if 40 <= risk_score < 50 and (sirs_count >= 2 or lactate > 1.5):
+            stage_name, stage_num = calculate_sepsis_stage(p)
+            
+            watchlist_item = {
+                "id": p["id"],
+                "name": p["name"],
+                "mrn": p.get("mrn", ""),
+                "room": p.get("room", ""),
+                "age": p.get("age", 0),
+                "gender": p.get("gender", ""),
+                "diagnosis": p.get("diagnosis", ""),
+                "risk_score": risk_score,
+                "risk_level": "WATCH",
+                "watch_reason": f"Risk {risk_score} with SIRS={sirs_count}, Lactate={lactate:.1f}",
+                "sepsis_stage": stage_name,
+                "sirs_count": sirs_count,
+                "lactate": lactate,
+                "vitals": p.get("vitals", {}).get("current", {}),
+                "labs": p.get("labs", {}).get("current", {}),
+                "recommended_actions": [
+                    "Monitor vitals every 2 hours",
+                    "Repeat lactate in 4 hours",
+                    "Notify physician if condition worsens"
+                ]
+            }
+            watchlist.append(watchlist_item)
+    
+    # Sort by risk score descending
+    watchlist.sort(key=lambda x: x["risk_score"], reverse=True)
+    
+    return {
+        "watchlist": watchlist,
+        "count": len(watchlist),
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+@app.get("/api/patients/{patient_id}/sepsis-huddle-summary")
+async def get_sepsis_huddle_summary(patient_id: str):
+    """
+    Sepsis Huddle Summary: Quick clinical summary for rapid huddles.
+    Consolidates: why worried, trajectory, top 3 actions, bundle status.
+    """
+    patient = next((p for p in MOCK_PATIENTS if p["id"] == patient_id), None)
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    
+    stage_name, stage_num = calculate_sepsis_stage(patient)
+    sirs_count = get_patient_sirs(patient)
+    lactate = get_patient_lactate(patient)
+    risk_reason = get_risk_reason(patient)
+    
+    # Determine trajectory based on vitals/labs trends
+    vitals_current = patient.get("vitals", {}).get("current", {})
+    vitals_prev = patient.get("vitals", {}).get("previous", {})
+    labs_current = patient.get("labs", {}).get("current", {})
+    labs_prev = patient.get("labs", {}).get("previous", {})
+    
+    trajectory = "stable"
+    trajectory_details = []
+    
+    if vitals_prev and labs_prev:
+        hr_change = vitals_current.get("heart_rate", 0) - vitals_prev.get("heart_rate", 0)
+        lactate_change = labs_current.get("lactate", 0) - labs_prev.get("lactate", 0)
+        
+        if hr_change > 10 or lactate_change > 0.5:
+            trajectory = "worsening"
+            if hr_change > 10:
+                trajectory_details.append(f"HR increased by {hr_change}")
+            if lactate_change > 0.5:
+                trajectory_details.append(f"Lactate increased by {lactate_change:.1f}")
+        elif hr_change < -10 or lactate_change < -0.3:
+            trajectory = "improving"
+            if hr_change < -10:
+                trajectory_details.append(f"HR decreased by {abs(hr_change)}")
+            if lactate_change < -0.3:
+                trajectory_details.append(f"Lactate decreased by {abs(lactate_change):.1f}")
+    
+    # Top 3 recommended actions based on stage
+    if stage_num >= 3:
+        top_actions = [
+            "Blood cultures x2 from separate sites (STAT)",
+            "Broad-spectrum antibiotics within 1 hour",
+            "30 mL/kg crystalloid for hypotension or lactate >= 4"
+        ]
+    elif stage_num >= 2:
+        top_actions = [
+            "Blood cultures before antibiotics",
+            "Repeat lactate in 2-4 hours",
+            "Notify attending physician"
+        ]
+    else:
+        top_actions = [
+            "Continue monitoring vitals q2h",
+            "Repeat labs in 4-6 hours",
+            "Reassess if clinical status changes"
+        ]
+    
+    return {
+        "patient_id": patient_id,
+        "name": patient.get("name", ""),
+        "room": patient.get("room", ""),
+        "diagnosis": patient.get("diagnosis", ""),
+        "why_worried": {
+            "risk_score": patient.get("risk_score", 0),
+            "risk_reason": risk_reason,
+            "sepsis_stage": stage_name,
+            "sirs_count": sirs_count,
+            "lactate": lactate
+        },
+        "trajectory": {
+            "status": trajectory,
+            "details": trajectory_details
+        },
+        "top_actions": top_actions,
+        "bundle_status": {
+            "blood_cultures": "pending",
+            "lactate_measured": True,
+            "antibiotics": "pending",
+            "fluids": "pending" if stage_num >= 3 else "not_indicated"
+        },
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.get("/api/featured-patients")
+async def get_featured_patients():
+    """
+    Get featured demo patients with comprehensive EHR-like data.
+    These 4 patients demonstrate different sepsis presentations:
+    1. UTI Septic Shock (Critical)
+    2. Pneumonia Sepsis (High Risk)
+    3. Necrotizing Fasciitis (Moderate - Smart Logic catch)
+    4. Post-op Abdominal (Watchlist candidate)
+    """
+    patients_with_history = get_featured_patients_with_history()
+    
+    # Add Smart Logic analysis to each patient
+    for p in patients_with_history:
+        p["is_high_risk"] = is_patient_high_risk(p)
+        p["risk_reason"] = get_risk_reason(p)
+        p["smart_risk_level"] = classify_risk_level(p)
+        stage_name, stage_num = calculate_sepsis_stage(p)
+        p["sepsis_stage"] = stage_name
+        p["sepsis_stage_num"] = stage_num
+        p["priority_score"] = get_priority_score(p)
+    
+    return {
+        "patients": patients_with_history,
+        "count": len(patients_with_history),
+        "description": "Featured demo patients with 120-hour history data"
+    }
+
+
+@app.get("/api/patients/{patient_id}/journey-120hr")
+async def get_patient_journey_120hr(patient_id: str):
+    """
+    Get 120-hour patient journey data for EPIC-style reporting.
+    Includes vitals history, labs history, medications, notes, and bundle status.
+    """
+    # Check featured patients first
+    featured = get_featured_patients_with_history()
+    patient = next((p for p in featured if p["id"] == patient_id), None)
+    
+    if not patient:
+        # Fall back to mock patients
+        patient = next((p for p in MOCK_PATIENTS if p["id"] == patient_id), None)
+        if patient:
+            # Generate 120-hour history for mock patient
+            from featured_patients import generate_120hr_vitals_history, generate_120hr_labs_history
+            
+            vitals_current = patient.get("vitals", {}).get("current", {})
+            base_vitals = {
+                "heart_rate": vitals_current.get("heart_rate", 80) - 15,
+                "temperature": vitals_current.get("temperature", 37.0) - 0.8,
+                "systolic_bp": 120,
+                "diastolic_bp": 75,
+                "respiratory_rate": vitals_current.get("respiratory_rate", 16) - 4,
+                "spo2": min(100, vitals_current.get("spo2", 98) + 3)
+            }
+            
+            labs_current = patient.get("labs", {}).get("current", {})
+            base_labs = {
+                "lactate": max(0.8, labs_current.get("lactate", 1.0) - 1.5),
+                "wbc": max(5, labs_current.get("wbc", 8.0) - 6.0),
+                "creatinine": max(0.7, labs_current.get("creatinine", 1.0) - 0.5),
+                "bilirubin": max(0.3, labs_current.get("bilirubin", 0.8) - 0.3)
+            }
+            
+            trajectory = "worsening" if patient.get("risk_level") in ["CRITICAL", "HIGH"] else "stable"
+            patient["vitals_history"] = generate_120hr_vitals_history(base_vitals, trajectory)
+            patient["labs_history"] = generate_120hr_labs_history(base_labs, trajectory)
+    
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    
+    # Add Smart Logic analysis
+    patient["is_high_risk"] = is_patient_high_risk(patient)
+    patient["risk_reason"] = get_risk_reason(patient)
+    stage_name, stage_num = calculate_sepsis_stage(patient)
+    patient["sepsis_stage"] = stage_name
+    patient["sepsis_stage_num"] = stage_num
+    
+    return {
+        "patient": patient,
+        "vitals_history": patient.get("vitals_history", []),
+        "labs_history": patient.get("labs_history", []),
+        "medications": patient.get("medications", []),
+        "notes": patient.get("notes", []),
+        "problem_list": patient.get("problem_list", []),
+        "allergies": patient.get("allergies", []),
+        "devices": patient.get("devices", []),
+        "sepsis_bundle": patient.get("sepsis_bundle", {}),
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+@app.get("/api/patients/{patient_id}/comprehensive-data")
+async def get_patient_comprehensive_data(patient_id: str, db: AsyncSession = Depends(get_db)):
+    """
+    Get comprehensive clinical data for a patient with 150+ parameters.
+    Based on real sepsis pathophysiology and post-mortem findings.
+    
+    Returns:
+    - 120-hour time series data for all clinical parameters
+    - Organized by clinical panels (vitals, CBC, metabolic, coag, ABG, inflammatory, cardiac, renal, scores, microbiology, imaging, interventions, outcomes)
+    - Realistic progression based on patient archetype (survivor vs non-survivor)
+    - Lactate clearance curves
+    - Organ dysfunction sequences
+    """
+    # Get patient from database or featured patients
+    patient = await get_patient_from_db(patient_id, db)
+    
+    if not patient:
+        featured = get_featured_patients_with_history()
+        patient = next((p for p in featured if p["id"] == patient_id), None)
+    
+    if not patient:
+        patient = next((p for p in MOCK_PATIENTS if p["id"] == patient_id), None)
+    
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    
+    # Determine archetype based on patient risk level and outcome
+    risk_level = patient.get("risk_level", "MODERATE")
+    if risk_level == "CRITICAL":
+        # 30% chance of non-survivor for critical patients
+        import random
+        if random.random() < 0.3:
+            archetype = "refractory_shock_nonsurvivor"
+        else:
+            archetype = "septic_shock_survivor"
+    elif risk_level == "HIGH":
+        archetype = "septic_shock_survivor"
+    elif risk_level == "MODERATE":
+        # 10% chance of late MODS for moderate patients
+        import random
+        if random.random() < 0.1:
+            archetype = "late_mods_nonsurvivor"
+        else:
+            archetype = "uncomplicated_sepsis"
+    else:
+        archetype = "uncomplicated_sepsis"
+    
+    # Generate comprehensive clinical data
+    clinical_data = generate_patient_clinical_data(
+        patient_id=patient_id,
+        archetype=archetype,
+        hours=120,
+        interval_hours=4
+    )
+    
+    # Generate lactate clearance curve
+    lactate_clearance = generate_lactate_clearance_curve(archetype, hours=72)
+    
+    # Get current parameters (at presentation)
+    current_params = get_current_parameters(clinical_data)
+    
+    # Get parameter categories for frontend
+    categories = get_parameter_categories()
+    
+    # Add Smart Logic analysis
+    is_high_risk = is_patient_high_risk(patient)
+    risk_reason = get_risk_reason(patient)
+    stage_name, stage_num = calculate_sepsis_stage(patient)
+    
+    return {
+        "patient": {
+            "id": patient.get("id"),
+            "name": patient.get("name"),
+            "mrn": patient.get("mrn"),
+            "age": patient.get("age"),
+            "room": patient.get("room"),
+            "risk_level": risk_level,
+            "risk_score": patient.get("risk_score"),
+            "diagnosis": patient.get("diagnosis"),
+            "admission_date": patient.get("admission_date")
+        },
+        "archetype": archetype,
+        "archetype_description": ARCHETYPES[archetype]["description"],
+        "mortality_risk": ARCHETYPES[archetype]["mortality"],
+        "smart_logic": {
+            "is_high_risk": is_high_risk,
+            "risk_reason": risk_reason,
+            "sepsis_stage": stage_name,
+            "sepsis_stage_num": stage_num
+        },
+        "parameter_count": clinical_data["parameter_count"],
+        "categories": categories,
+        "current_parameters": current_params,
+        "timepoints": clinical_data["timepoints"],
+        "parameters_by_category": clinical_data["parameters_by_category"],
+        "lactate_clearance": lactate_clearance,
+        "timestamp": datetime.now().isoformat()
+    }
+
+
+@app.get("/api/clinical-parameters/categories")
+async def get_clinical_parameter_categories():
+    """Get list of all clinical parameter categories with counts"""
+    categories = get_parameter_categories()
+    total_params = sum(cat["parameter_count"] for cat in categories)
+    return {
+        "categories": categories,
+        "total_parameters": total_params
+    }
+
+
+@app.get("/api/patients/{patient_id}/multi-agent-analysis")
+async def get_multi_agent_analysis(patient_id: str, db: AsyncSession = Depends(get_db)):
+    """
+    Run comprehensive multi-agent analysis for a patient.
+    
+    Architecture:
+    1. 8 Specialized Agents analyze different clinical domains in parallel:
+       - Vitals Agent: HR, BP, RR, Temp, SpO2 trends
+       - Hematology Agent: CBC, differential, platelets
+       - Metabolic Agent: BMP/CMP, electrolytes, liver/renal function
+       - Coagulation Agent: PT/INR, D-dimer, DIC assessment
+       - ABG Agent: Acid-base, oxygenation, lactate kinetics
+       - Inflammatory Agent: CRP, procalcitonin, cytokines
+       - Cardiac Agent: Troponin, BNP, hemodynamics
+       - Microbiology Agent: Cultures, organisms, susceptibilities
+    
+    2. Aggregation Layer synthesizes findings and identifies cross-system correlations
+    
+    3. RAG Deep Search retrieves relevant context from raw 120-hr data + agent results
+    
+    Returns comprehensive analysis with:
+    - Individual agent findings with confidence scores
+    - Cross-system correlations (e.g., DIC, ARDS, MODS patterns)
+    - Overall assessment and sepsis trajectory
+    - Mortality risk estimation
+    - Prioritized recommended actions
+    """
+    # Get patient from database or featured patients
+    patient = await get_patient_from_db(patient_id, db)
+    
+    if not patient:
+        featured = get_featured_patients_with_history()
+        patient = next((p for p in featured if p["id"] == patient_id), None)
+    
+    if not patient:
+        patient = next((p for p in MOCK_PATIENTS if p["id"] == patient_id), None)
+    
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    
+    # Get comprehensive data first
+    risk_level = patient.get("risk_level", "MODERATE")
+    if risk_level == "CRITICAL":
+        import random
+        archetype = "refractory_shock_nonsurvivor" if random.random() < 0.3 else "septic_shock_survivor"
+    elif risk_level == "HIGH":
+        archetype = "septic_shock_survivor"
+    elif risk_level == "MODERATE":
+        import random
+        archetype = "late_mods_nonsurvivor" if random.random() < 0.1 else "uncomplicated_sepsis"
+    else:
+        archetype = "uncomplicated_sepsis"
+    
+    comprehensive_data = generate_patient_clinical_data(
+        patient_id=patient_id,
+        archetype=archetype,
+        hours=120,
+        interval_hours=4
+    )
+    comprehensive_data["archetype"] = archetype
+    comprehensive_data["archetype_description"] = ARCHETYPES[archetype]["description"]
+    comprehensive_data["current_parameters"] = get_current_parameters(comprehensive_data)
+    comprehensive_data["lactate_clearance"] = generate_lactate_clearance_curve(archetype, hours=72)
+    
+    # Prepare patient data for agents
+    patient_data = {
+        "id": patient.get("id"),
+        "name": patient.get("name"),
+        "age": patient.get("age"),
+        "diagnosis": patient.get("diagnosis"),
+        "risk_level": risk_level,
+        "risk_score": patient.get("risk_score")
+    }
+    
+    # Run multi-agent analysis
+    analysis = await run_multi_agent_analysis(
+        patient_id=patient_id,
+        patient_data=patient_data,
+        comprehensive_data=comprehensive_data
+    )
+    
+    # Convert to dict for JSON response
+    return {
+        "patient_id": analysis.patient_id,
+        "timestamp": analysis.timestamp,
+        "agent_findings": [
+            {
+                "agent_name": f.agent_name,
+                "domain": f.domain,
+                "summary": f.summary,
+                "issues": [
+                    {
+                        "id": i.id,
+                        "label": i.label,
+                        "severity": i.severity,
+                        "evidence": i.evidence,
+                        "related_parameters": i.related_parameters,
+                        "clinical_significance": i.clinical_significance
+                    }
+                    for i in f.issues
+                ],
+                "trends": f.trends,
+                "overall_risk": f.overall_risk,
+                "confidence": f.confidence,
+                "recommendations": f.recommendations
+            }
+            for f in analysis.agent_findings
+        ],
+        "cross_system_correlations": [
+            {
+                "id": c.id,
+                "pattern_name": c.pattern_name,
+                "involved_systems": c.involved_systems,
+                "evidence": c.evidence,
+                "clinical_interpretation": c.clinical_interpretation,
+                "severity": c.severity
+            }
+            for c in analysis.cross_system_correlations
+        ],
+        "overall_assessment": analysis.overall_assessment,
+        "primary_concerns": analysis.primary_concerns,
+        "sepsis_trajectory": analysis.sepsis_trajectory,
+        "mortality_risk": analysis.mortality_risk,
+        "recommended_actions": analysis.recommended_actions,
+        "confidence_score": analysis.confidence_score
+    }
+
+
+@app.post("/api/multi-agent/clear-cache")
+async def clear_multi_agent_cache():
+    """Clear the multi-agent analysis cache"""
+    clear_agent_cache()
+    return {"status": "success", "message": "Agent cache cleared"}
+
 
 def generate_12hour_history(patient: Dict) -> Dict:
     """Generate 12-hour historical data based on current/previous values and risk level"""
@@ -1461,6 +2114,33 @@ async def get_rl_results():
     try:
         with open(results_path, 'r') as f:
             results = json.load(f)
+        
+        # Transform learning_curves from dict of arrays to array of objects for frontend
+        lc = results.get("learning_curves", {})
+        if isinstance(lc, dict) and "batches" in lc:
+            transformed_curves = []
+            batches = lc.get("batches", [])
+            rl_win_rates = lc.get("rl_win_rate", [])
+            baseline_win_rates = lc.get("baseline_win_rate", [])
+            rl_utilities = lc.get("rl_utility", [])
+            baseline_utilities = lc.get("baseline_utility", [])
+            rl_regrets = lc.get("rl_regret", [])
+            
+            for i, batch_id in enumerate(batches):
+                transformed_curves.append({
+                    "batch_id": batch_id,
+                    "rl_win_rate": rl_win_rates[i] * 100 if i < len(rl_win_rates) else 0,
+                    "baseline_win_rate": baseline_win_rates[i] * 100 if i < len(baseline_win_rates) else 0,
+                    "rl_utility": rl_utilities[i] if i < len(rl_utilities) else 0,
+                    "baseline_utility": baseline_utilities[i] if i < len(baseline_utilities) else 0,
+                    "rl_regret": rl_regrets[i] if i < len(rl_regrets) else 0
+                })
+            results["learning_curves"] = transformed_curves
+        
+        # Transform insights_report to insights for frontend
+        if "insights_report" in results and "insights" not in results:
+            results["insights"] = results["insights_report"]
+        
         return results
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to load RL results: {str(e)}")

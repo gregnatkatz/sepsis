@@ -81,7 +81,15 @@ interface Patient {
 function App() {
   const [patients, setPatients] = useState<Patient[]>([])
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null)
-  const [currentView, setCurrentView] = useState<'dashboard' | 'table' | 'chat' | 'rl-analytics' | 'report'>('dashboard')
+  const [currentView, setCurrentView] = useState<'worklist' | 'watchlist' | 'featured' | 'table' | 'chat' | 'rl-analytics' | 'report' | 'dashboard'>('worklist')
+  const [worklistData, setWorklistData] = useState<any[]>([])
+  const [watchlistData, setWatchlistData] = useState<any[]>([])
+  const [featuredPatients, setFeaturedPatients] = useState<any[]>([])
+  const [selectedJourney, setSelectedJourney] = useState<any>(null)
+  const [loadingWorklist, setLoadingWorklist] = useState(false)
+  const [loadingWatchlist, setLoadingWatchlist] = useState(false)
+  const [loadingFeatured, setLoadingFeatured] = useState(false)
+  const [loadingJourney, setLoadingJourney] = useState(false)
   const [isListening, setIsListening] = useState(false)
   const [transcript, setTranscript] = useState('')
   const [chatMessages, setChatMessages] = useState<Array<{ role: string; content: string }>>([])
@@ -117,15 +125,83 @@ function App() {
   const [monteCarloPathways, setMonteCarloPathways] = useState<any>(null)
   const [selectedPathway, setSelectedPathway] = useState<number>(0)
   const [loadingMonteCarlo, setLoadingMonteCarlo] = useState(false)
+  const [comprehensiveData, setComprehensiveData] = useState<any>(null)
+  const [multiAgentAnalysis, setMultiAgentAnalysis] = useState<any>(null)
+  const [loadingComprehensive, setLoadingComprehensive] = useState(false)
+  const [loadingMultiAgent, setLoadingMultiAgent] = useState(false)
+  const [activeParamCategory, setActiveParamCategory] = useState<string>('vitals')
   const chatEndRef = useRef<HTMLDivElement>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
   const mediaStreamRef = useRef<MediaStream | null>(null)
   const aguiClientRef = useRef<AGUIClient | null>(null)
 
-  useEffect(() => {
-    fetchPatients()
-  }, [])
+    useEffect(() => {
+      fetchPatients()
+      fetchWorklist()
+      fetchWatchlist()
+      fetchFeaturedPatients()
+    }, [])
+
+    const fetchWorklist = async () => {
+      setLoadingWorklist(true)
+      try {
+        const response = await fetch(`${API_URL}/api/sepsis-worklist`, {
+          headers: getAuthHeaders()
+        })
+        const data = await response.json()
+        setWorklistData(data.worklist || [])
+      } catch (error) {
+        console.error('Error fetching worklist:', error)
+      } finally {
+        setLoadingWorklist(false)
+      }
+    }
+
+    const fetchWatchlist = async () => {
+      setLoadingWatchlist(true)
+      try {
+        const response = await fetch(`${API_URL}/api/watchlist-patients`, {
+          headers: getAuthHeaders()
+        })
+        const data = await response.json()
+        setWatchlistData(data.watchlist || [])
+      } catch (error) {
+        console.error('Error fetching watchlist:', error)
+      } finally {
+        setLoadingWatchlist(false)
+      }
+    }
+
+    const fetchFeaturedPatients = async () => {
+      setLoadingFeatured(true)
+      try {
+        const response = await fetch(`${API_URL}/api/featured-patients`, {
+          headers: getAuthHeaders()
+        })
+        const data = await response.json()
+        setFeaturedPatients(data.patients || [])
+      } catch (error) {
+        console.error('Error fetching featured patients:', error)
+      } finally {
+        setLoadingFeatured(false)
+      }
+    }
+
+    const fetchPatientJourney = async (patientId: string) => {
+      setLoadingJourney(true)
+      try {
+        const response = await fetch(`${API_URL}/api/patients/${patientId}/journey-120hr`, {
+          headers: getAuthHeaders()
+        })
+        const data = await response.json()
+        setSelectedJourney(data)
+      } catch (error) {
+        console.error('Error fetching patient journey:', error)
+      } finally {
+        setLoadingJourney(false)
+      }
+    }
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -517,10 +593,15 @@ function App() {
     setWhatIfPrediction(null)
     setMonteCarloPathways(null)
     setSelectedPathway(0)
+    setComprehensiveData(null)
+    setMultiAgentAnalysis(null)
+    setActiveParamCategory('vitals')
     setLoadingHistory(true)
     setLoadingAnalysis(true)
     setLoadingGameChangers(true)
     setLoadingMonteCarlo(true)
+    setLoadingComprehensive(true)
+    setLoadingMultiAgent(true)
 
     try {
       const historyResponse = await fetch(`${API_URL}/api/patients/${patient.id}/history`, {
@@ -595,6 +676,30 @@ function App() {
       console.error('Error fetching Monte Carlo pathways:', error)
       setLoadingMonteCarlo(false)
     }
+
+    try {
+      const comprehensiveRes = await fetch(`${API_URL}/api/patients/${patient.id}/comprehensive-data`, {
+        headers: getAuthHeaders()
+      })
+      const comprehensiveDataResult = await comprehensiveRes.json()
+      setComprehensiveData(comprehensiveDataResult)
+      setLoadingComprehensive(false)
+    } catch (error) {
+      console.error('Error fetching comprehensive data:', error)
+      setLoadingComprehensive(false)
+    }
+
+    try {
+      const multiAgentRes = await fetch(`${API_URL}/api/patients/${patient.id}/multi-agent-analysis`, {
+        headers: getAuthHeaders()
+      })
+      const multiAgentData = await multiAgentRes.json()
+      setMultiAgentAnalysis(multiAgentData)
+      setLoadingMultiAgent(false)
+    } catch (error) {
+      console.error('Error fetching multi-agent analysis:', error)
+      setLoadingMultiAgent(false)
+    }
   }
 
   const highRiskPatients = patients.filter(p => p.risk_level === 'CRITICAL' || p.risk_level === 'HIGH')
@@ -623,67 +728,100 @@ function App() {
         </div>
       </header>
 
-      <div className="bg-dark-card border-b border-gray-700">
-        <div className="container mx-auto px-6">
-          <div className="flex space-x-1">
-            <button
-              onClick={() => setCurrentView('dashboard')}
-              className={`px-6 py-3 font-medium transition-colors ${
-                currentView === 'dashboard'
-                  ? 'text-teams-purple border-b-2 border-teams-purple'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              <Users className="w-4 h-4 inline mr-2" />
-              Dashboard
-            </button>
-            <button
-              onClick={() => setCurrentView('table')}
-              className={`px-6 py-3 font-medium transition-colors ${
-                currentView === 'table'
-                  ? 'text-teams-purple border-b-2 border-teams-purple'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              <TableIcon className="w-4 h-4 inline mr-2" />
-              Table
-            </button>
-            <button
-              onClick={() => setCurrentView('chat')}
-              className={`px-6 py-3 font-medium transition-colors ${
-                currentView === 'chat'
-                  ? 'text-teams-purple border-b-2 border-teams-purple'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              <MessageSquare className="w-4 h-4 inline mr-2" />
-              Chat
-            </button>
-            <button
-              onClick={() => setCurrentView('rl-analytics')}
-              className={`px-6 py-3 font-medium transition-colors ${
-                currentView === 'rl-analytics'
-                  ? 'text-teams-purple border-b-2 border-teams-purple'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              <BarChart3 className="w-4 h-4 inline mr-2" />
-              RL Analytics
-            </button>
-            <button
-              onClick={() => setCurrentView('report')}
-              className={`px-6 py-3 font-medium transition-colors ${
-                currentView === 'report'
-                  ? 'text-teams-purple border-b-2 border-teams-purple'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              <TrendingUp className="w-4 h-4 inline mr-2" />
-              Report
-            </button>
-          </div>
-        </div>
-      </div>
+            <div className="bg-dark-card border-b border-gray-700">
+              <div className="container mx-auto px-6">
+                <div className="flex space-x-1 overflow-x-auto">
+                  <button
+                    onClick={() => setCurrentView('worklist')}
+                    className={`px-4 py-3 font-medium transition-colors whitespace-nowrap ${
+                      currentView === 'worklist'
+                        ? 'text-teams-purple border-b-2 border-teams-purple'
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    <AlertTriangle className="w-4 h-4 inline mr-2" />
+                    Worklist
+                  </button>
+                  <button
+                    onClick={() => setCurrentView('watchlist')}
+                    className={`px-4 py-3 font-medium transition-colors whitespace-nowrap ${
+                      currentView === 'watchlist'
+                        ? 'text-teams-purple border-b-2 border-teams-purple'
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    <Clock className="w-4 h-4 inline mr-2" />
+                    Watchlist
+                  </button>
+                  <button
+                    onClick={() => setCurrentView('featured')}
+                    className={`px-4 py-3 font-medium transition-colors whitespace-nowrap ${
+                      currentView === 'featured'
+                        ? 'text-teams-purple border-b-2 border-teams-purple'
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    <Stethoscope className="w-4 h-4 inline mr-2" />
+                    Featured Cases
+                  </button>
+                  <button
+                    onClick={() => setCurrentView('table')}
+                    className={`px-4 py-3 font-medium transition-colors whitespace-nowrap ${
+                      currentView === 'table'
+                        ? 'text-teams-purple border-b-2 border-teams-purple'
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    <TableIcon className="w-4 h-4 inline mr-2" />
+                    Table
+                  </button>
+                  <button
+                    onClick={() => setCurrentView('chat')}
+                    className={`px-4 py-3 font-medium transition-colors whitespace-nowrap ${
+                      currentView === 'chat'
+                        ? 'text-teams-purple border-b-2 border-teams-purple'
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    <MessageSquare className="w-4 h-4 inline mr-2" />
+                    Chat
+                  </button>
+                  <button
+                    onClick={() => setCurrentView('rl-analytics')}
+                    className={`px-4 py-3 font-medium transition-colors whitespace-nowrap ${
+                      currentView === 'rl-analytics'
+                        ? 'text-teams-purple border-b-2 border-teams-purple'
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    <BarChart3 className="w-4 h-4 inline mr-2" />
+                    RL Analytics
+                  </button>
+                  <button
+                    onClick={() => setCurrentView('report')}
+                    className={`px-4 py-3 font-medium transition-colors whitespace-nowrap ${
+                      currentView === 'report'
+                        ? 'text-teams-purple border-b-2 border-teams-purple'
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    <TrendingUp className="w-4 h-4 inline mr-2" />
+                    Report
+                  </button>
+                  <button
+                    onClick={() => setCurrentView('dashboard')}
+                    className={`px-4 py-3 font-medium transition-colors whitespace-nowrap ${
+                      currentView === 'dashboard'
+                        ? 'text-teams-purple border-b-2 border-teams-purple'
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    <Users className="w-4 h-4 inline mr-2" />
+                    Dashboard
+                  </button>
+                </div>
+              </div>
+            </div>
 
       <div className="container mx-auto px-6 py-6">
         <div className="grid grid-cols-12 gap-6">
@@ -744,8 +882,485 @@ function App() {
             </Card>
           </div>
 
-          <div className="col-span-9">
-            {currentView === 'dashboard' && (
+                    <div className="col-span-9">
+                      {currentView === 'worklist' && (
+                        <Card className="bg-dark-card border-gray-700">
+                          <CardHeader>
+                            <CardTitle className="flex items-center space-x-2 text-white">
+                              <AlertTriangle className="w-5 h-5 text-red-500" />
+                              <span>Sepsis Worklist - Immediate Attention Required</span>
+                            </CardTitle>
+                            <CardDescription className="text-gray-400">
+                              High-risk patients prioritized by sepsis stage and risk score ({worklistData.length} patients)
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            {loadingWorklist ? (
+                              <div className="space-y-4">
+                                {[1, 2, 3].map(i => <Skeleton key={i} className="h-32 w-full bg-gray-700" />)}
+                              </div>
+                            ) : worklistData.length === 0 ? (
+                              <div className="text-center py-8 text-gray-400">
+                                <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-green-500" />
+                                <p>No high-risk patients currently on worklist</p>
+                              </div>
+                            ) : (
+                              <ScrollArea className="h-[600px]">
+                                <div className="space-y-4">
+                                  {worklistData.map((item: any, index: number) => (
+                                    <div
+                                      key={item.id}
+                                      className="p-4 bg-dark-hover border border-red-800 rounded-lg cursor-pointer hover:border-red-600 transition-colors"
+                                      onClick={() => {
+                                        const patient = patients.find(p => p.id === item.id)
+                                        if (patient) openPatientDetails(patient)
+                                      }}
+                                    >
+                                      <div className="flex items-start justify-between mb-3">
+                                        <div className="flex items-center space-x-3">
+                                          <div className="w-8 h-8 rounded-full bg-red-600 flex items-center justify-center text-white font-bold text-sm">
+                                            {index + 1}
+                                          </div>
+                                          <div>
+                                            <h3 className="font-semibold text-white">{item.name}</h3>
+                                            <p className="text-sm text-gray-400">{item.room} | MRN: {item.mrn}</p>
+                                          </div>
+                                        </div>
+                                        <div className="text-right">
+                                          <Badge className={`${item.sepsis_stage_num >= 3 ? 'bg-red-600' : item.sepsis_stage_num >= 2 ? 'bg-orange-500' : 'bg-yellow-500'} text-white`}>
+                                            {item.sepsis_stage}
+                                          </Badge>
+                                          <p className="text-xs text-gray-400 mt-1">Risk: {item.risk_score}</p>
+                                        </div>
+                                      </div>
+                            
+                                      <div className="grid grid-cols-4 gap-4 mb-3">
+                                        <div className="bg-dark p-2 rounded border border-gray-700">
+                                          <p className="text-xs text-gray-500">SIRS</p>
+                                          <p className="text-lg font-bold text-white">{item.sirs_count}/4</p>
+                                        </div>
+                                        <div className="bg-dark p-2 rounded border border-gray-700">
+                                          <p className="text-xs text-gray-500">Lactate</p>
+                                          <p className="text-lg font-bold text-white">{item.lactate?.toFixed(1) || 'N/A'}</p>
+                                        </div>
+                                        <div className="bg-dark p-2 rounded border border-gray-700">
+                                          <p className="text-xs text-gray-500">HR</p>
+                                          <p className="text-lg font-bold text-white">{item.vitals?.heart_rate || 'N/A'}</p>
+                                        </div>
+                                        <div className="bg-dark p-2 rounded border border-gray-700">
+                                          <p className="text-xs text-gray-500">Temp</p>
+                                          <p className="text-lg font-bold text-white">{item.vitals?.temperature?.toFixed(1) || 'N/A'}°C</p>
+                                        </div>
+                                      </div>
+                            
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex-1">
+                                          <p className="text-sm text-gray-300"><span className="text-gray-500">Diagnosis:</span> {item.diagnosis}</p>
+                                          <p className="text-sm text-yellow-400 mt-1"><span className="text-gray-500">Risk Reason:</span> {item.risk_reason}</p>
+                                        </div>
+                                        <Button 
+                                          variant="outline" 
+                                          size="sm" 
+                                          className="border-teams-purple text-teams-purple hover:bg-teams-purple hover:text-white"
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            fetchPatientJourney(item.id)
+                                          }}
+                                        >
+                                          View 120hr Journey
+                                        </Button>
+                                      </div>
+                            
+                                      {item.notes && item.notes.length > 0 && (
+                                        <div className="mt-3 pt-3 border-t border-gray-700">
+                                          <p className="text-xs text-gray-500 mb-1">Latest Note:</p>
+                                          <p className="text-sm text-gray-300">{item.notes[0]?.note}</p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </ScrollArea>
+                            )}
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {currentView === 'watchlist' && (
+                        <Card className="bg-dark-card border-gray-700">
+                          <CardHeader>
+                            <CardTitle className="flex items-center space-x-2 text-white">
+                              <Clock className="w-5 h-5 text-yellow-500" />
+                              <span>Watchlist - Monitor Closely</span>
+                            </CardTitle>
+                            <CardDescription className="text-gray-400">
+                              Sub-threshold patients with concerning signs ({watchlistData.length} patients)
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            {loadingWatchlist ? (
+                              <div className="space-y-4">
+                                {[1, 2, 3].map(i => <Skeleton key={i} className="h-24 w-full bg-gray-700" />)}
+                              </div>
+                            ) : watchlistData.length === 0 ? (
+                              <div className="text-center py-8 text-gray-400">
+                                <CheckCircle2 className="w-12 h-12 mx-auto mb-4 text-green-500" />
+                                <p>No patients currently on watchlist</p>
+                                <p className="text-sm mt-2">All moderate-risk patients are stable</p>
+                              </div>
+                            ) : (
+                              <ScrollArea className="h-[600px]">
+                                <div className="space-y-4">
+                                  {watchlistData.map((item: any) => (
+                                    <div
+                                      key={item.id}
+                                      className="p-4 bg-dark-hover border border-yellow-800 rounded-lg cursor-pointer hover:border-yellow-600 transition-colors"
+                                      onClick={() => {
+                                        const patient = patients.find(p => p.id === item.id)
+                                        if (patient) openPatientDetails(patient)
+                                      }}
+                                    >
+                                      <div className="flex items-start justify-between mb-3">
+                                        <div>
+                                          <h3 className="font-semibold text-white">{item.name}</h3>
+                                          <p className="text-sm text-gray-400">{item.room} | MRN: {item.mrn}</p>
+                                        </div>
+                                        <Badge className="bg-yellow-600 text-white">WATCH</Badge>
+                                      </div>
+                            
+                                      <p className="text-sm text-yellow-400 mb-3">{item.watch_reason}</p>
+                            
+                                      <div className="bg-dark p-3 rounded border border-gray-700">
+                                        <p className="text-xs text-gray-500 mb-2">Recommended Actions:</p>
+                                        <ul className="space-y-1">
+                                          {item.recommended_actions?.map((action: string, i: number) => (
+                                            <li key={i} className="text-sm text-gray-300 flex items-center">
+                                              <span className="w-1.5 h-1.5 bg-yellow-500 rounded-full mr-2"></span>
+                                              {action}
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </ScrollArea>
+                            )}
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {currentView === 'featured' && (
+                        <div className="space-y-6">
+                          <Card className="bg-dark-card border-gray-700">
+                            <CardHeader>
+                              <CardTitle className="flex items-center space-x-2 text-white">
+                                <Stethoscope className="w-5 h-5 text-teams-purple" />
+                                <span>Featured Clinical Cases - 120hr Patient Journey</span>
+                              </CardTitle>
+                              <CardDescription className="text-gray-400">
+                                4 realistic sepsis presentations with comprehensive EHR data
+                              </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                              {loadingFeatured ? (
+                                <div className="grid grid-cols-2 gap-4">
+                                  {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-48 w-full bg-gray-700" />)}
+                                </div>
+                              ) : (
+                                <div className="grid grid-cols-2 gap-4">
+                                  {featuredPatients.map((patient: any) => (
+                                    <div
+                                      key={patient.id}
+                                      className={`p-4 bg-dark-hover border rounded-lg cursor-pointer transition-colors ${
+                                        patient.sepsis_stage_num >= 3 ? 'border-red-700 hover:border-red-500' :
+                                        patient.sepsis_stage_num >= 2 ? 'border-orange-700 hover:border-orange-500' :
+                                        'border-yellow-700 hover:border-yellow-500'
+                                      }`}
+                                      onClick={() => fetchPatientJourney(patient.id)}
+                                    >
+                                      <div className="flex items-start justify-between mb-3">
+                                        <div>
+                                          <h3 className="font-semibold text-white">{patient.name}</h3>
+                                          <p className="text-sm text-gray-400">{patient.age}yo {patient.gender} | {patient.room}</p>
+                                        </div>
+                                        <div className="text-right">
+                                          <Badge className={`${
+                                            patient.risk_level === 'CRITICAL' ? 'bg-red-600' :
+                                            patient.risk_level === 'HIGH' ? 'bg-orange-500' :
+                                            'bg-yellow-500'
+                                          } text-white`}>
+                                            {patient.risk_level}
+                                          </Badge>
+                                          <p className="text-xs text-gray-400 mt-1">Score: {patient.risk_score}</p>
+                                        </div>
+                                      </div>
+                            
+                                      <p className="text-sm text-gray-300 mb-2">{patient.diagnosis}</p>
+                                      <p className="text-sm text-gray-400 mb-3">{patient.chief_complaint}</p>
+                            
+                                      <div className="grid grid-cols-3 gap-2 mb-3">
+                                        <div className="bg-dark p-2 rounded text-center">
+                                          <p className="text-xs text-gray-500">Stage</p>
+                                          <p className="text-sm font-bold text-white">{patient.sepsis_stage}</p>
+                                        </div>
+                                        <div className="bg-dark p-2 rounded text-center">
+                                          <p className="text-xs text-gray-500">SIRS</p>
+                                          <p className="text-sm font-bold text-white">{patient.sirs_criteria}/4</p>
+                                        </div>
+                                        <div className="bg-dark p-2 rounded text-center">
+                                          <p className="text-xs text-gray-500">Lactate</p>
+                                          <p className="text-sm font-bold text-white">{patient.labs?.current?.lactate?.toFixed(1)}</p>
+                                        </div>
+                                      </div>
+                            
+                                      <div className="flex items-center justify-between">
+                                        <p className="text-xs text-gray-500">
+                                          Attending: {patient.attending_physician}
+                                        </p>
+                                        <Button 
+                                          variant="outline" 
+                                          size="sm" 
+                                          className="border-teams-purple text-teams-purple hover:bg-teams-purple hover:text-white"
+                                        >
+                                          View Journey
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </CardContent>
+                          </Card>
+
+                          {selectedJourney && (
+                            <Card className="bg-dark-card border-gray-700">
+                              <CardHeader>
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <CardTitle className="text-white">
+                                      120-Hour Patient Journey: {selectedJourney.patient?.name}
+                                    </CardTitle>
+                                    <CardDescription className="text-gray-400">
+                                      {selectedJourney.patient?.diagnosis} | {selectedJourney.patient?.room}
+                                    </CardDescription>
+                                  </div>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className="text-gray-400 hover:text-white"
+                                    onClick={() => setSelectedJourney(null)}
+                                  >
+                                    Close
+                                  </Button>
+                                </div>
+                              </CardHeader>
+                              <CardContent>
+                                {loadingJourney ? (
+                                  <Skeleton className="h-96 w-full bg-gray-700" />
+                                ) : (
+                                  <Tabs defaultValue="vitals" className="w-full">
+                                    <TabsList className="bg-dark border border-gray-700">
+                                      <TabsTrigger value="vitals" className="data-[state=active]:bg-teams-purple">Vitals Trend</TabsTrigger>
+                                      <TabsTrigger value="labs" className="data-[state=active]:bg-teams-purple">Labs Trend</TabsTrigger>
+                                      <TabsTrigger value="meds" className="data-[state=active]:bg-teams-purple">Medications</TabsTrigger>
+                                      <TabsTrigger value="notes" className="data-[state=active]:bg-teams-purple">Notes</TabsTrigger>
+                                      <TabsTrigger value="bundle" className="data-[state=active]:bg-teams-purple">Sepsis Bundle</TabsTrigger>
+                                    </TabsList>
+                          
+                                    <TabsContent value="vitals" className="mt-4">
+                                      <div className="h-80">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                          <LineChart data={selectedJourney.vitals_history?.slice(-30) || []}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                            <XAxis 
+                                              dataKey="timestamp" 
+                                              stroke="#9CA3AF"
+                                              tickFormatter={(val) => new Date(val).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                            />
+                                            <YAxis stroke="#9CA3AF" />
+                                            <Tooltip 
+                                              contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151' }}
+                                              labelStyle={{ color: '#9CA3AF' }}
+                                            />
+                                            <Legend />
+                                            <Line type="monotone" dataKey="heart_rate" stroke="#EF4444" name="HR" dot={false} />
+                                            <Line type="monotone" dataKey="respiratory_rate" stroke="#F59E0B" name="RR" dot={false} />
+                                            <Line type="monotone" dataKey="spo2" stroke="#10B981" name="SpO2" dot={false} />
+                                          </LineChart>
+                                        </ResponsiveContainer>
+                                      </div>
+                                      <div className="h-60 mt-4">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                          <LineChart data={selectedJourney.vitals_history?.slice(-30) || []}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                            <XAxis 
+                                              dataKey="timestamp" 
+                                              stroke="#9CA3AF"
+                                              tickFormatter={(val) => new Date(val).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                            />
+                                            <YAxis stroke="#9CA3AF" domain={[35, 42]} />
+                                            <Tooltip 
+                                              contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151' }}
+                                              labelStyle={{ color: '#9CA3AF' }}
+                                            />
+                                            <Legend />
+                                            <Line type="monotone" dataKey="temperature" stroke="#8B5CF6" name="Temp (°C)" dot={false} />
+                                          </LineChart>
+                                        </ResponsiveContainer>
+                                      </div>
+                                    </TabsContent>
+                          
+                                    <TabsContent value="labs" className="mt-4">
+                                      <div className="h-80">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                          <LineChart data={selectedJourney.labs_history?.slice(-15) || []}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                            <XAxis 
+                                              dataKey="timestamp" 
+                                              stroke="#9CA3AF"
+                                              tickFormatter={(val) => new Date(val).toLocaleDateString([], {month: 'short', day: 'numeric'})}
+                                            />
+                                            <YAxis stroke="#9CA3AF" />
+                                            <Tooltip 
+                                              contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151' }}
+                                              labelStyle={{ color: '#9CA3AF' }}
+                                            />
+                                            <Legend />
+                                            <Line type="monotone" dataKey="lactate" stroke="#EF4444" name="Lactate" />
+                                            <Line type="monotone" dataKey="wbc" stroke="#F59E0B" name="WBC" />
+                                            <Line type="monotone" dataKey="creatinine" stroke="#3B82F6" name="Creatinine" />
+                                          </LineChart>
+                                        </ResponsiveContainer>
+                                      </div>
+                            
+                                      <div className="mt-4 overflow-x-auto">
+                                        <table className="w-full text-sm">
+                                          <thead>
+                                            <tr className="border-b border-gray-700">
+                                              <th className="text-left p-2 text-gray-400">Time</th>
+                                              <th className="text-left p-2 text-gray-400">Lactate</th>
+                                              <th className="text-left p-2 text-gray-400">WBC</th>
+                                              <th className="text-left p-2 text-gray-400">Creatinine</th>
+                                              <th className="text-left p-2 text-gray-400">Platelets</th>
+                                              <th className="text-left p-2 text-gray-400">Procalcitonin</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {selectedJourney.labs_history?.slice(-10).reverse().map((lab: any, i: number) => (
+                                              <tr key={i} className="border-b border-gray-800">
+                                                <td className="p-2 text-gray-300">{new Date(lab.timestamp).toLocaleString()}</td>
+                                                <td className={`p-2 ${lab.lactate > 2 ? 'text-red-400' : 'text-gray-300'}`}>{lab.lactate?.toFixed(1)}</td>
+                                                <td className={`p-2 ${lab.wbc > 12 ? 'text-yellow-400' : 'text-gray-300'}`}>{lab.wbc?.toFixed(1)}</td>
+                                                <td className={`p-2 ${lab.creatinine > 1.5 ? 'text-orange-400' : 'text-gray-300'}`}>{lab.creatinine?.toFixed(1)}</td>
+                                                <td className={`p-2 ${lab.platelets < 150 ? 'text-red-400' : 'text-gray-300'}`}>{lab.platelets}</td>
+                                                <td className={`p-2 ${lab.procalcitonin > 2 ? 'text-red-400' : 'text-gray-300'}`}>{lab.procalcitonin?.toFixed(2)}</td>
+                                              </tr>
+                                            ))}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    </TabsContent>
+                          
+                                    <TabsContent value="meds" className="mt-4">
+                                      <div className="space-y-3">
+                                        {selectedJourney.medications?.map((med: any, i: number) => (
+                                          <div key={i} className="p-3 bg-dark rounded border border-gray-700">
+                                            <div className="flex items-center justify-between">
+                                              <div>
+                                                <p className="font-semibold text-white">{med.name}</p>
+                                                <p className="text-sm text-gray-400">{med.dose} | {med.route} | {med.frequency}</p>
+                                              </div>
+                                              <p className="text-xs text-gray-500">Started: {med.start}</p>
+                                            </div>
+                                          </div>
+                                        ))}
+                                        {(!selectedJourney.medications || selectedJourney.medications.length === 0) && (
+                                          <p className="text-gray-400 text-center py-4">No medications recorded</p>
+                                        )}
+                                      </div>
+                                    </TabsContent>
+                          
+                                    <TabsContent value="notes" className="mt-4">
+                                      <ScrollArea className="h-80">
+                                        <div className="space-y-3">
+                                          {selectedJourney.notes?.map((note: any, i: number) => (
+                                            <div key={i} className="p-3 bg-dark rounded border border-gray-700">
+                                              <div className="flex items-center justify-between mb-2">
+                                                <p className="text-sm font-semibold text-teams-purple">{note.author || 'Nurse'}</p>
+                                                <p className="text-xs text-gray-500">{note.time}</p>
+                                              </div>
+                                              <p className="text-sm text-gray-300">{note.note}</p>
+                                            </div>
+                                          ))}
+                                          {(!selectedJourney.notes || selectedJourney.notes.length === 0) && (
+                                            <p className="text-gray-400 text-center py-4">No notes recorded</p>
+                                          )}
+                                        </div>
+                                      </ScrollArea>
+                                    </TabsContent>
+                          
+                                    <TabsContent value="bundle" className="mt-4">
+                                      <div className="grid grid-cols-2 gap-4">
+                                        {Object.entries(selectedJourney.sepsis_bundle || {}).map(([key, value]: [string, any]) => (
+                                          <div key={key} className={`p-4 rounded border ${
+                                            value?.status === 'complete' ? 'bg-green-900/20 border-green-700' :
+                                            value?.status === 'in_progress' ? 'bg-yellow-900/20 border-yellow-700' :
+                                            value?.status === 'pending' ? 'bg-red-900/20 border-red-700' :
+                                            'bg-dark border-gray-700'
+                                          }`}>
+                                            <div className="flex items-center justify-between mb-2">
+                                              <p className="font-semibold text-white capitalize">{key.replace(/_/g, ' ')}</p>
+                                              {value?.status === 'complete' && <CheckCircle2 className="w-5 h-5 text-green-500" />}
+                                              {value?.status === 'in_progress' && <Clock className="w-5 h-5 text-yellow-500" />}
+                                              {value?.status === 'pending' && <AlertTriangle className="w-5 h-5 text-red-500" />}
+                                            </div>
+                                            {value?.time && <p className="text-xs text-gray-400">Time: {value.time}</p>}
+                                            {value?.value && <p className="text-sm text-gray-300">Value: {value.value}</p>}
+                                            {value?.volume_ml && <p className="text-sm text-gray-300">Volume: {value.volume_ml} mL</p>}
+                                            {value?.agent && <p className="text-sm text-gray-300">Agent: {value.agent}</p>}
+                                          </div>
+                                        ))}
+                                      </div>
+                            
+                                      {selectedJourney.patient?.problem_list && (
+                                        <div className="mt-6">
+                                          <h4 className="text-white font-semibold mb-3">Problem List</h4>
+                                          <div className="space-y-2">
+                                            {selectedJourney.patient.problem_list.map((problem: any, i: number) => (
+                                              <div key={i} className="flex items-center justify-between p-2 bg-dark rounded border border-gray-700">
+                                                <p className="text-sm text-gray-300">{problem.problem}</p>
+                                                <Badge className={problem.status === 'Active' ? 'bg-red-600' : 'bg-gray-600'}>
+                                                  {problem.status}
+                                                </Badge>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+                            
+                                      {selectedJourney.patient?.allergies && selectedJourney.patient.allergies.length > 0 && (
+                                        <div className="mt-6">
+                                          <h4 className="text-white font-semibold mb-3">Allergies</h4>
+                                          <div className="flex flex-wrap gap-2">
+                                            {selectedJourney.patient.allergies.map((allergy: any, i: number) => (
+                                              <Badge key={i} className="bg-red-900 text-red-200">
+                                                {allergy.allergen}: {allergy.reaction}
+                                              </Badge>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </TabsContent>
+                                  </Tabs>
+                                )}
+                              </CardContent>
+                            </Card>
+                          )}
+                        </div>
+                      )}
+
+                      {currentView === 'dashboard' && (
               <Card className="bg-dark-card border-gray-700">
                 <CardHeader>
                   <CardTitle className="flex items-center space-x-2 text-white">
@@ -896,10 +1511,10 @@ function App() {
                             </td>
                             <td className="p-3 text-gray-300">{patient.sirs_criteria}/4</td>
                             <td className="p-3 text-gray-300 max-w-xs truncate">{patient.diagnosis}</td>
-                            <td className="p-3 text-gray-300">{patient.vitals.current.heart_rate}</td>
-                            <td className="p-3 text-gray-300">{patient.vitals.current.temperature}°C</td>
-                            <td className="p-3 text-gray-300">{patient.labs.current.wbc}</td>
-                            <td className="p-3 text-gray-300">{patient.labs.current.lactate}</td>
+                            <td className="p-3 text-gray-300">{patient.vitals?.current?.heart_rate ?? 'N/A'}</td>
+                            <td className="p-3 text-gray-300">{patient.vitals?.current?.temperature ? `${patient.vitals.current.temperature}°C` : 'N/A'}</td>
+                            <td className="p-3 text-gray-300">{patient.labs?.current?.wbc ?? 'N/A'}</td>
+                            <td className="p-3 text-gray-300">{patient.labs?.current?.lactate ?? 'N/A'}</td>
                             <td className="p-3">
                               <Button
                                 size="sm"
@@ -1576,7 +2191,7 @@ function App() {
                         <Skeleton className="h-64 w-full bg-gray-700" />
                         <Skeleton className="h-64 w-full bg-gray-700" />
                       </div>
-                    ) : reportData && reportData.kaggle ? (
+                    ) : reportData && reportData.kaggle && reportData.kaggle.threshold_metrics ? (
                       <div className="space-y-6">
                         {/* Kaggle Dataset Metrics */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -2435,6 +3050,218 @@ function App() {
                     )}
                   </>
                 )}
+
+                {/* Comprehensive Clinical Data - 150+ Parameters */}
+                <div className="border-t border-gray-700 pt-4">
+                  <div className="flex items-center space-x-2 mb-3">
+                    <Beaker className="w-5 h-5 text-emerald-400" />
+                    <h3 className="text-sm font-semibold text-white">Comprehensive Clinical Data (150+ Parameters)</h3>
+                  </div>
+                  
+                  {loadingComprehensive ? (
+                    <div className="space-y-3">
+                      <Skeleton className="h-10 w-full bg-gray-700 rounded-lg" />
+                      <Skeleton className="h-40 w-full bg-gray-700 rounded-lg" />
+                    </div>
+                  ) : comprehensiveData ? (
+                    <div className="bg-slate-900/70 border border-slate-600 rounded-lg p-4">
+                      <div className="flex flex-wrap gap-2 mb-4">
+                        {['vitals', 'cbc', 'metabolic', 'coagulation', 'abg', 'inflammatory', 'cardiac', 'renal', 'scores', 'microbiology', 'imaging', 'interventions'].map((cat) => (
+                          <button
+                            key={cat}
+                            onClick={() => setActiveParamCategory(cat)}
+                            className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                              activeParamCategory === cat
+                                ? 'bg-emerald-600 text-white'
+                                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                            }`}
+                          >
+                            {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                          </button>
+                        ))}
+                      </div>
+                      
+                      <div className="max-h-64 overflow-y-auto">
+                        {comprehensiveData.current_parameters && comprehensiveData.current_parameters[activeParamCategory] ? (
+                          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                            {Object.entries(comprehensiveData.current_parameters[activeParamCategory]).map(([key, value]: [string, any]) => (
+                              <div key={key} className="p-2 bg-gray-800/50 rounded border border-gray-700">
+                                <div className="text-xs text-gray-400 truncate">{key.replace(/_/g, ' ')}</div>
+                                <div className="text-sm font-semibold text-white">
+                                  {typeof value === 'number' ? value.toFixed(2) : String(value)}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-xs text-gray-400 text-center py-4">
+                            No data available for {activeParamCategory}
+                          </div>
+                        )}
+                      </div>
+                      
+                      {comprehensiveData.archetype && (
+                        <div className="mt-4 p-3 bg-purple-950/30 border border-purple-600/40 rounded">
+                          <div className="text-xs text-purple-300 font-semibold mb-1">Patient Archetype</div>
+                          <div className="text-sm text-white">{comprehensiveData.archetype.replace(/_/g, ' ')}</div>
+                          {comprehensiveData.archetype_description && (
+                            <div className="text-xs text-gray-300 mt-1">{comprehensiveData.archetype_description}</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-gray-400 text-center py-4">
+                      No comprehensive data available
+                    </div>
+                  )}
+                </div>
+
+                {/* Multi-Agent Analysis Results */}
+                <div className="border-t border-gray-700 pt-4">
+                  <div className="flex items-center space-x-2 mb-3">
+                    <Brain className="w-5 h-5 text-cyan-400" />
+                    <h3 className="text-sm font-semibold text-white">Multi-Agent Deep Analysis</h3>
+                  </div>
+                  
+                  {loadingMultiAgent ? (
+                    <div className="space-y-3">
+                      <Skeleton className="h-20 w-full bg-gray-700 rounded-lg" />
+                      <Skeleton className="h-20 w-full bg-gray-700 rounded-lg" />
+                    </div>
+                  ) : multiAgentAnalysis ? (
+                    <div className="bg-slate-900/70 border border-slate-600 rounded-lg p-4 space-y-4">
+                      {/* Overall Assessment */}
+                      <div className="p-3 bg-gray-800/50 rounded border border-gray-700">
+                        <div className="text-xs text-gray-400 mb-1">Overall Assessment</div>
+                        <div className="text-sm text-white">{multiAgentAnalysis.overall_assessment}</div>
+                      </div>
+                      
+                      {/* Key Metrics */}
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="p-2 bg-gray-800/50 rounded border border-gray-700 text-center">
+                          <div className="text-xs text-gray-400">Sepsis Trajectory</div>
+                          <div className={`text-sm font-bold ${
+                            multiAgentAnalysis.sepsis_trajectory === 'worsening' ? 'text-red-400' :
+                            multiAgentAnalysis.sepsis_trajectory === 'improving' ? 'text-green-400' : 'text-yellow-400'
+                          }`}>
+                            {multiAgentAnalysis.sepsis_trajectory}
+                          </div>
+                        </div>
+                        <div className="p-2 bg-gray-800/50 rounded border border-gray-700 text-center">
+                          <div className="text-xs text-gray-400">Mortality Risk</div>
+                          <div className={`text-sm font-bold ${
+                            multiAgentAnalysis.mortality_risk === 'very_high' || multiAgentAnalysis.mortality_risk === 'high' ? 'text-red-400' :
+                            multiAgentAnalysis.mortality_risk === 'moderate' ? 'text-yellow-400' : 'text-green-400'
+                          }`}>
+                            {multiAgentAnalysis.mortality_risk?.replace(/_/g, ' ')}
+                          </div>
+                        </div>
+                        <div className="p-2 bg-gray-800/50 rounded border border-gray-700 text-center">
+                          <div className="text-xs text-gray-400">Confidence</div>
+                          <div className="text-sm font-bold text-cyan-400">
+                            {Math.round((multiAgentAnalysis.confidence_score || 0) * 100)}%
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Primary Concerns */}
+                      {multiAgentAnalysis.primary_concerns && multiAgentAnalysis.primary_concerns.length > 0 && (
+                        <div>
+                          <div className="text-xs text-gray-400 mb-2">Primary Concerns</div>
+                          <div className="space-y-1">
+                            {multiAgentAnalysis.primary_concerns.map((concern: string, idx: number) => (
+                              <div key={idx} className="text-xs text-red-300 flex items-start">
+                                <span className="mr-2">•</span>
+                                <span>{concern}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Agent Findings */}
+                      {multiAgentAnalysis.agent_findings && multiAgentAnalysis.agent_findings.length > 0 && (
+                        <div>
+                          <div className="text-xs text-gray-400 mb-2">Specialized Agent Findings</div>
+                          <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                            {multiAgentAnalysis.agent_findings.map((finding: any, idx: number) => (
+                              <div key={idx} className={`p-2 rounded border ${
+                                finding.overall_risk === 'critical' ? 'bg-red-950/30 border-red-600/40' :
+                                finding.overall_risk === 'high' ? 'bg-orange-950/30 border-orange-600/40' :
+                                finding.overall_risk === 'moderate' ? 'bg-yellow-950/30 border-yellow-600/40' :
+                                'bg-green-950/30 border-green-600/40'
+                              }`}>
+                                <div className="flex items-center justify-between mb-1">
+                                  <div className="text-xs font-semibold text-white">{finding.agent_name}</div>
+                                  <div className={`text-xs px-1.5 py-0.5 rounded ${
+                                    finding.overall_risk === 'critical' ? 'bg-red-600 text-white' :
+                                    finding.overall_risk === 'high' ? 'bg-orange-600 text-white' :
+                                    finding.overall_risk === 'moderate' ? 'bg-yellow-600 text-black' :
+                                    'bg-green-600 text-white'
+                                  }`}>
+                                    {finding.overall_risk}
+                                  </div>
+                                </div>
+                                <div className="text-xs text-gray-300 line-clamp-2">{finding.summary}</div>
+                                {finding.confidence && (
+                                  <div className="text-xs text-gray-500 mt-1">Confidence: {Math.round(finding.confidence * 100)}%</div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Cross-System Correlations */}
+                      {multiAgentAnalysis.cross_system_correlations && multiAgentAnalysis.cross_system_correlations.length > 0 && (
+                        <div>
+                          <div className="text-xs text-gray-400 mb-2">Cross-System Correlations</div>
+                          <div className="space-y-2">
+                            {multiAgentAnalysis.cross_system_correlations.map((corr: any, idx: number) => (
+                              <div key={idx} className="p-2 bg-purple-950/30 border border-purple-600/40 rounded">
+                                <div className="flex items-center justify-between mb-1">
+                                  <div className="text-xs font-semibold text-purple-300">{corr.pattern_name}</div>
+                                  <div className={`text-xs px-1.5 py-0.5 rounded ${
+                                    corr.severity === 'critical' ? 'bg-red-600 text-white' :
+                                    corr.severity === 'high' ? 'bg-orange-600 text-white' : 'bg-yellow-600 text-black'
+                                  }`}>
+                                    {corr.severity}
+                                  </div>
+                                </div>
+                                <div className="text-xs text-gray-300">{corr.clinical_interpretation}</div>
+                                {corr.involved_systems && (
+                                  <div className="text-xs text-gray-500 mt-1">
+                                    Systems: {corr.involved_systems.join(', ')}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Recommended Actions */}
+                      {multiAgentAnalysis.recommended_actions && multiAgentAnalysis.recommended_actions.length > 0 && (
+                        <div>
+                          <div className="text-xs text-gray-400 mb-2">Recommended Actions</div>
+                          <div className="space-y-1">
+                            {multiAgentAnalysis.recommended_actions.map((action: string, idx: number) => (
+                              <div key={idx} className="text-xs text-emerald-300 flex items-start">
+                                <span className="mr-2">{idx + 1}.</span>
+                                <span>{action}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-gray-400 text-center py-4">
+                      No multi-agent analysis available
+                    </div>
+                  )}
+                </div>
 
                 <div className="flex space-x-3">
                   <Button
